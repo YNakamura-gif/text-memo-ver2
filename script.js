@@ -478,6 +478,268 @@ function setupBuildingManagementListeners() {
     // ここで毎回設定すると重複する可能性があるため注意
 }
 
+// --- Deterioration Data Management ---
+const deteriorationForm = document.getElementById('deteriorationForm');
+const deteriorationTableBody = document.getElementById('deteriorationTableBody');
+
+let deteriorationData = {}; // { buildingId: { recordId: data, ... }, ... }
+let deteriorationListeners = {}; // { buildingId: listenerRef, ... }
+
+// Firebase Refs for Deterioration
+function getDeteriorationsRef(projectId, buildingId) {
+  return database.ref(`projects/${projectId}/deteriorations/${buildingId}`);
+}
+function getDeteriorationCounterRef(projectId, buildingId) {
+  return database.ref(`projects/${projectId}/counters/${buildingId}`);
+}
+
+// 次の劣化番号を取得 (Transaction使用)
+async function getNextDeteriorationNumber(projectId, buildingId) {
+    if (!projectId || !buildingId) return null;
+    const counterRef = getDeteriorationCounterRef(projectId, buildingId);
+    try {
+        const result = await counterRef.transaction(currentValue => {
+            return (currentValue || 0) + 1;
+        });
+        if (result.committed) {
+            console.log(`Next number for ${buildingId}:`, result.snapshot.val());
+            return result.snapshot.val();
+        } else {
+            console.error('Transaction aborted for counter');
+            return null;
+        }
+    } catch (error) {
+        console.error("Error getting next deterioration number:", error);
+        return null;
+    }
+}
+
+// 劣化情報入力フォームの送信処理
+async function handleDeteriorationSubmit(event) {
+    event.preventDefault(); // デフォルトのフォーム送信を防止
+
+    if (!currentProjectId || !currentBuildingId) {
+        alert("プロジェクトまたは建物が選択されていません。");
+        return;
+    }
+
+    const location = locationInput.value.trim();
+    const name = deteriorationNameInput.value.trim();
+    const photoNumber = photoNumberInput.value.trim();
+
+    if (!location || !name) {
+        alert("場所と劣化名を入力してください。");
+        return;
+    }
+
+    // 次の番号を取得
+    const nextNumber = await getNextDeteriorationNumber(currentProjectId, currentBuildingId);
+    if (nextNumber === null) {
+        alert("劣化番号の取得に失敗しました。もう一度試してください。");
+        return;
+    }
+
+    const newData = {
+        number: nextNumber,
+        location: location,
+        name: name,
+        photoNumber: photoNumber || '' // 写真番号は空でもOK
+    };
+
+    try {
+        const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+        // push() で新しいユニークIDを生成してデータを保存
+        await deteriorationRef.push(newData);
+        console.log(`Deterioration data added for ${currentBuildingId}:`, newData);
+
+        // フォームをクリア
+        locationInput.value = '';
+        deteriorationNameInput.value = '';
+        photoNumberInput.value = '';
+        // 次の番号表示を更新 (リスナーで更新されるが、即時反映のため)
+        updateNextIdDisplay(currentProjectId, currentBuildingId);
+
+        // TODO: Implement continuous registration logic if needed
+
+    } catch (error) {
+        console.error("Error adding deterioration data:", error);
+        alert("劣化情報の追加に失敗しました。");
+        // 番号カウンターを戻す処理が必要になる場合がある (複雑)
+    }
+}
+
+// 登録済み劣化情報テーブルを描画/更新
+function renderDeteriorationTable(buildingId) {
+    deteriorationTableBody.innerHTML = ''; // テーブルをクリア
+    const dataForBuilding = deteriorationData[buildingId] || {};
+    const records = Object.entries(dataForBuilding)
+                        .map(([id, data]) => ({ id, ...data })) // オブジェクトを配列に変換
+                        .sort((a, b) => a.number - b.number); // 番号順にソート
+
+    if (records.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="5" class="text-center text-gray-500 py-4">この建物のデータはまだありません</td>`;
+        deteriorationTableBody.appendChild(tr);
+        nextIdDisplay.textContent = '1'; // データがなければ次は1
+    } else {
+        records.forEach(record => {
+            const tr = document.createElement('tr');
+            tr.dataset.recordId = record.id; // データIDを行に保持
+            tr.innerHTML = `
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${record.number}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.location)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.name)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.photoNumber)}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                    <button class="text-indigo-600 hover:text-indigo-900 mr-2 edit-btn">編集</button>
+                    <button class="text-red-600 hover:text-red-900 delete-btn">削除</button>
+                </td>
+            `;
+            // 編集・削除ボタンのイベントリスナーを追加
+            tr.querySelector('.edit-btn').addEventListener('click', () => handleEditClick(buildingId, record.id));
+            tr.querySelector('.delete-btn').addEventListener('click', () => handleDeleteClick(buildingId, record.id, record.number));
+            deteriorationTableBody.appendChild(tr);
+        });
+         // 次の番号表示を更新
+        updateNextIdDisplay(currentProjectId, buildingId);
+    }
+}
+
+// 次の番号表示を更新する関数
+async function updateNextIdDisplay(projectId, buildingId) {
+    if (!projectId || !buildingId) {
+        nextIdDisplay.textContent = '1';
+        return;
+    }
+    try {
+        const snapshot = await getDeteriorationCounterRef(projectId, buildingId).once('value');
+        const currentCounter = snapshot.val() || 0;
+        nextIdDisplay.textContent = (currentCounter + 1).toString();
+    } catch (error) {
+        console.error("Error fetching counter for next ID display:", error);
+        nextIdDisplay.textContent = '-'; // エラー時は表示を変更
+    }
+}
+
+// HTMLエスケープ関数 (簡易版)
+function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return unsafe;
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+}
+
+// 特定の建物の劣化情報リスナーを設定
+function setupDeteriorationListener(projectId, buildingId) {
+    if (!projectId || !buildingId) return;
+
+    // 既存のリスナーがあればデタッチ
+    if (deteriorationListeners[buildingId]) {
+        deteriorationListeners[buildingId].off();
+        console.log(`Detached existing deterioration listener for ${buildingId}`);
+    }
+
+    console.log(`Setting up deterioration listener for ${buildingId} in project ${projectId}`);
+    const ref = getDeteriorationsRef(projectId, buildingId);
+    deteriorationListeners[buildingId] = ref;
+
+    // 初期データ読み込みと変更監視
+    ref.on('value', (snapshot) => {
+        deteriorationData[buildingId] = snapshot.val() || {};
+        console.log(`Deterioration data updated for ${buildingId}:`, deteriorationData[buildingId]);
+        if (buildingId === currentBuildingId) { // 現在選択中の建物ならテーブル再描画
+            renderDeteriorationTable(buildingId);
+        }
+    }, (error) => {
+        console.error(`Error listening for deterioration data for ${buildingId}:`, error);
+        // エラー処理
+    });
+     // 次の番号表示も更新
+     updateNextIdDisplay(projectId, buildingId);
+}
+
+// 全ての建物に対するリスナーを解除
+function detachAllDeteriorationListeners() {
+    Object.entries(deteriorationListeners).forEach(([buildingId, listenerRef]) => {
+        listenerRef.off();
+        console.log(`Detached deterioration listener for ${buildingId}`);
+    });
+    deteriorationListeners = {};
+    deteriorationData = {}; // データもクリア
+}
+
+// --- Edit/Delete Logic (Placeholders/Basic Implementation) ---
+function handleEditClick(buildingId, recordId) {
+    if (!deteriorationData[buildingId] || !deteriorationData[buildingId][recordId]) {
+        console.error(`Record ${recordId} not found for building ${buildingId}`);
+        return;
+    }
+    const record = deteriorationData[buildingId][recordId];
+    console.log(`Editing record ${recordId} for building ${buildingId}:`, record);
+
+    currentEditRecordId = recordId; // 編集中のレコードIDを保持
+
+    // モーダルにデータをセット
+    editIdDisplay.textContent = record.number;
+    editLocationInput.value = record.location;
+    editDeteriorationNameInput.value = record.name;
+    editPhotoNumberInput.value = record.photoNumber;
+
+    // モーダル表示
+    editModal.classList.remove('hidden');
+}
+
+async function handleEditSubmit(event) {
+    event.preventDefault();
+    if (!currentProjectId || !currentBuildingId || !currentEditRecordId) {
+        alert("編集対象の情報が正しくありません。");
+        return;
+    }
+
+    const updatedData = {
+        number: parseInt(editIdDisplay.textContent, 10), // 番号は変更しない想定
+        location: editLocationInput.value.trim(),
+        name: editDeteriorationNameInput.value.trim(),
+        photoNumber: editPhotoNumberInput.value.trim()
+    };
+
+    if (!updatedData.location || !updatedData.name) {
+        alert("場所と劣化名は必須です。");
+        return;
+    }
+
+    try {
+        const recordRef = getDeteriorationsRef(currentProjectId, currentBuildingId).child(currentEditRecordId);
+        await recordRef.update(updatedData);
+        console.log(`Record ${currentEditRecordId} updated successfully.`);
+        editModal.classList.add('hidden'); // モーダルを閉じる
+        currentEditRecordId = null; // 編集対象IDをクリア
+    } catch (error) {
+        console.error("Error updating record:", error);
+        alert("情報の更新に失敗しました。");
+    }
+}
+
+async function handleDeleteClick(buildingId, recordId, recordNumber) {
+    if (!currentProjectId) return;
+
+    if (confirm(`番号 ${recordNumber} の劣化情報「${deteriorationData[buildingId]?.[recordId]?.name || '' }」を削除しますか？`)) {
+        try {
+            const recordRef = getDeteriorationsRef(currentProjectId, buildingId).child(recordId);
+            await recordRef.remove();
+            console.log(`Record ${recordId} deleted successfully.`);
+            // 注意: カウンターは戻さない。欠番となる。
+            // もしカウンターを戻す場合は Transaction が必要で複雑になる。
+        } catch (error) {
+            console.error("Error deleting record:", error);
+            alert("情報の削除に失敗しました。");
+        }
+    }
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
   // Set current year in footer
@@ -517,6 +779,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Setup building add button listener (once)
   addBuildingBtn.addEventListener('click', addBuilding);
+
+  // Setup deterioration form listener
+  deteriorationForm.addEventListener('submit', handleDeteriorationSubmit);
+
+  // Setup edit form listener
+  editForm.addEventListener('submit', handleEditSubmit);
 
   console.log("Initialization complete.");
 
