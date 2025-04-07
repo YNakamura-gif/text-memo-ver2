@@ -1,37 +1,32 @@
-# techContext.md
+# 12条点検アプリケーション 技術コンテキスト
 
 ## 使用技術とライブラリ
-- **フロントエンド:**
+- **フロントエンド**: 
     - HTML5
-    - CSS3
-        - [Tailwind CSS](https://tailwindcss.com/): ユーティリティファーストのCSSフレームワーク (UIベースとして提供されたものを利用)
+    - CSS3 (Tailwind CSS 2.2.19 をベースとする)
     - JavaScript (ES6+)
-- **バックエンド (BaaS):**
-    - [Firebase](https://firebase.google.com/)
-        - Realtime Database: NoSQLデータベース、リアルタイム同期
-        - Hosting: 静的Webホスティング
-        - Firebase SDK (JavaScript): フロントエンドからのFirebase利用
-- **開発ツール:**
-    - Visual Studio Code (または任意のテキストエディタ)
-    - Git: バージョン管理
-    - Webブラウザ (開発者ツール)
-- **その他:**
-    - (なし)
+    - (検討中) Vue.jsなどの軽量フレームワーク（必須ではないが、複雑度に応じて検討）
+- **データベース**: Firebase Realtime Database
+- **デプロイ**: Firebase Hosting
+- **予測変換データ**: CSV形式ファイル
+- **開発ツール**: 
+    - Git (バージョン管理)
+    - VS Code / Cursor (エディタ)
+    - ブラウザ開発者ツール
 
-## 開発環境の設定
-- Node.js と npm (Firebase CLIのインストールに必要)
-- Firebase CLI のインストール (`npm install -g firebase-tools`)
-- Firebase プロジェクトの作成 (Webコンソール経由)
-- ローカルでの Firebase ログイン (`firebase login`)
-- プロジェクトディレクトリでの Firebase 初期化 (`firebase init`)
-    - Hosting と Realtime Database を選択
+## 開発環境の設定 (推奨)
+- Node.js および npm/yarn (Firebase CLIや開発サーバーのため)
+- Firebase CLI (`npm install -g firebase-tools`)
+- Gitクライアント
 
 ## 技術的制約
-- **オンライン必須:** Firebase Realtime Database を利用するため、基本的にオンライン環境での使用が前提となる（Firebaseの基本的なオフラインキャッシュは機能するが、完全なオフライン動作はMVPでは実装しない）。
-- **Firebase 無料枠:** Realtime Database、Hosting ともに無料枠の制限（データ量、読み書き回数、転送量など）がある。大規模利用の場合は有料プランへの移行が必要になる可能性がある。
-- **ブラウザ互換性:** モダンブラウザ (Chrome, Firefox, Safari, Edgeの最新版) を対象とする。
+- Firebaseの無料プランの制限（データ容量、同時接続数、読み書き回数など）を考慮する。
+- モバイルデバイスでのパフォーマンスを重視し、重いライブラリや複雑な処理は避ける。
+- ブラウザの互換性（モダンブラウザを対象とする）。
+- 予測変換用CSVのサイズが大きすぎると、クライアントサイドでの読み込み・処理に時間がかかる可能性がある。
 
 ## ツールの使用パターン
-- **Git:** 機能実装や修正ごとにコミット。ブランチ戦略はGitflowを基本とする (featureブランチで開発)。
-- **Firebase CLI:** デプロイ (`firebase deploy`)、ローカルでのエミュレータ起動（開発中）などに使用。
-- **Firebase Console:** Realtime Databaseのデータ確認、Hostingの設定、使用状況のモニタリングに使用。 
+- **Firebase Console**: データベースの確認、デプロイ管理。
+- **Firebase CLI**: ローカルでの開発サーバー起動 (`firebase serve`)、デプロイ (`firebase deploy`)。
+- **Git**: 機能開発ごとにブランチを作成し、作業完了後に`develop`ブランチへマージする (Gitflowベース)。コミットはルールに従い、変更内容を明確にする。
+- **Tailwind CSS**: ユーティリティファーストのアプローチでUIを構築。提供されたHTMLをベースに調整。 
