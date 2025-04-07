@@ -23,6 +23,27 @@ const infoTab = document.getElementById('infoTab');
 const detailTab = document.getElementById('detailTab');
 const currentYearSpan = document.getElementById('currentYear');
 
+// -- Input Fields --
+const locationInput = document.getElementById('locationInput');
+const deteriorationNameInput = document.getElementById('deteriorationNameInput');
+const photoNumberInput = document.getElementById('photoNumberInput');
+const nextIdDisplay = document.getElementById('nextIdDisplay');
+
+// -- Prediction Lists --
+const locationPredictionsList = document.getElementById('locationPredictions');
+const deteriorationPredictionsList = document.getElementById('deteriorationPredictions');
+
+// -- Edit Modal Elements --
+const editModal = document.getElementById('editModal');
+const editForm = document.getElementById('editForm');
+const editIdDisplay = document.getElementById('editIdDisplay');
+const editLocationInput = document.getElementById('editLocationInput');
+const editLocationPredictionsList = document.getElementById('editLocationPredictions');
+const editDeteriorationNameInput = document.getElementById('editDeteriorationNameInput');
+const editDeteriorationPredictionsList = document.getElementById('editDeteriorationPredictions');
+const editPhotoNumberInput = document.getElementById('editPhotoNumberInput');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+
 // Prediction Data Storage
 let locationPredictions = []; // 部屋名
 let partPredictions = [];     // 部位
@@ -122,6 +143,115 @@ async function loadPredictionData() {
   }
 }
 
+// --- Prediction Logic ---
+
+// 場所の予測候補を生成 (前方一致: 読み)
+function generateLocationPredictions(inputText) {
+  const searchTerm = inputText.trim().toLowerCase();
+  if (!searchTerm) return [];
+
+  // 読みで前方一致検索
+  return locationPredictions
+    .filter(item => item.reading && item.reading.toLowerCase().startsWith(searchTerm))
+    .map(item => item.value) // 値 (部屋名) の配列を返す
+    .slice(0, 10); // 最大10件表示
+}
+
+// 劣化名の予測候補を生成 (部位読み2文字 + 劣化名読み2文字 で前方一致)
+function generateDeteriorationPredictions(inputText) {
+  const searchTerm = inputText.trim().toLowerCase();
+  if (!searchTerm) return [];
+
+  let results = [];
+
+  // 検索ロジック:
+  // 1. 部位(2文字) + 劣化(2文字) の組み合わせで検索 (例: 「がひひび」)
+  if (searchTerm.length >= 4) {
+      const partPrefix = searchTerm.substring(0, 2);
+      const deteriorationPrefix = searchTerm.substring(2, 4);
+      const matchingParts = partPredictions.filter(p => p.reading && p.reading.toLowerCase().startsWith(partPrefix));
+      const matchingDeteriorations = deteriorationPredictions.filter(d => d.reading && d.reading.toLowerCase().startsWith(deteriorationPrefix));
+
+      matchingParts.forEach(part => {
+          matchingDeteriorations.forEach(det => {
+              results.push(`${part.value} ${det.value}`);
+          });
+      });
+  }
+
+  // 2. 部位のみで検索 (入力が2文字以上の場合)
+  if (searchTerm.length >= 2) {
+    const matchingPartsOnly = partPredictions
+        .filter(p => p.reading && p.reading.toLowerCase().startsWith(searchTerm))
+        .map(p => p.value); // 部位名のみも候補に含める
+    results = results.concat(matchingPartsOnly);
+  }
+
+  // 3. 劣化名のみで検索 (入力が2文字以上の場合)
+  if (searchTerm.length >= 2) {
+    const matchingDeteriorationsOnly = deteriorationPredictions
+      .filter(d => d.reading && d.reading.toLowerCase().startsWith(searchTerm))
+      .map(d => d.value); // 劣化名のみも候補に含める
+    results = results.concat(matchingDeteriorationsOnly);
+  }
+
+  // 重複を除去して最大10件返す
+  return [...new Set(results)].slice(0, 10); 
+}
+
+// 予測リストを表示/更新する関数
+function showPredictions(inputElement, predictionListElement, predictions) {
+  // リストをクリア
+  predictionListElement.innerHTML = '';
+
+  if (predictions.length > 0) {
+    predictions.forEach(prediction => {
+      const li = document.createElement('li');
+      li.textContent = prediction;
+      li.classList.add('prediction-item');
+      // mousedown を使うことで、blur イベントより先に実行され選択が可能になる
+      li.addEventListener('mousedown', () => {
+        inputElement.value = prediction;
+        predictionListElement.classList.add('hidden');
+        predictionListElement.innerHTML = ''; // 選択後にリストをクリア
+      });
+      predictionListElement.appendChild(li);
+    });
+    predictionListElement.classList.remove('hidden');
+  } else {
+    predictionListElement.classList.add('hidden');
+  }
+}
+
+// 予測リストを隠す関数 (setTimeout用)
+function hidePredictions(predictionListElement) {
+    predictionListElement.classList.add('hidden');
+}
+
+// --- Event Listeners for Predictions ---
+
+function setupPredictionListeners(inputElement, predictionListElement, generatorFn) {
+    inputElement.addEventListener('input', () => {
+        const inputText = inputElement.value;
+        const predictions = generatorFn(inputText);
+        showPredictions(inputElement, predictionListElement, predictions);
+    });
+
+    // フォーカスが外れたら少し遅れてリストを隠す
+    inputElement.addEventListener('blur', () => {
+        setTimeout(() => hidePredictions(predictionListElement), 150); // 150ms 待つ
+    });
+
+    // フォーカス時に再表示 (入力があれば)
+    inputElement.addEventListener('focus', () => {
+        const inputText = inputElement.value;
+        if(inputText.trim()) { // 何か入力があれば予測を再試行
+          const predictions = generatorFn(inputText);
+          showPredictions(inputElement, predictionListElement, predictions);
+        }
+    });
+}
+
 // --- Tab Switching Logic ---
 function switchTab(activeTabId) {
   if (activeTabId === 'info') {
@@ -160,6 +290,18 @@ document.addEventListener('DOMContentLoaded', async () => { // async に変更
 
   console.log("Initialization complete. Prediction data loaded.");
 
+  // Setup prediction listeners after data is loaded
+  setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions);
+  setupPredictionListeners(deteriorationNameInput, deteriorationPredictionsList, generateDeteriorationPredictions);
+  setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions);
+  setupPredictionListeners(editDeteriorationNameInput, editDeteriorationPredictionsList, generateDeteriorationPredictions);
+
   // TODO: Load initial data from Firebase
   // TODO: Set up other event listeners (forms, buttons etc.)
+  // Example for Edit Modal Cancel Button (if needed later)
+  if (cancelEditBtn) {
+      cancelEditBtn.addEventListener('click', () => {
+          editModal.classList.add('hidden');
+      });
+  }
 }); 
