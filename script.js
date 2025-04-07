@@ -514,6 +514,62 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
     }
 }
 
+// --- Continuous Registration ---
+const continuousAddBtn = document.getElementById('continuousAddBtn');
+let lastAddedLocation = '';
+let lastAddedName = '';
+
+// 連続登録処理
+async function handleContinuousAdd() {
+    if (!currentProjectId || !currentBuildingId) {
+        alert("プロジェクトまたは建物が選択されていません。");
+        return;
+    }
+    if (!lastAddedLocation || !lastAddedName) {
+        alert("連続登録する元データがありません。一度通常登録を行ってください。");
+        return;
+    }
+
+    const photoNumber = photoNumberInput.value.trim(); // 写真番号のみ現在の入力値を使用
+
+    // 次の番号を取得
+    const nextNumber = await getNextDeteriorationNumber(currentProjectId, currentBuildingId);
+    if (nextNumber === null) {
+        alert("劣化番号の取得に失敗しました。もう一度試してください。");
+        return;
+    }
+
+    const newData = {
+        number: nextNumber,
+        location: lastAddedLocation, // 前回登録した場所
+        name: lastAddedName,         // 前回登録した劣化名
+        photoNumber: photoNumber || ''
+    };
+
+    try {
+        const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+        await deteriorationRef.push(newData);
+        console.log(`Continuous deterioration data added for ${currentBuildingId}:`, newData);
+
+        // 写真番号フィールドのみクリア
+        photoNumberInput.value = '';
+        // 次の番号表示を更新
+        updateNextIdDisplay(currentProjectId, currentBuildingId); 
+        // 連続登録用に保持している情報は更新しない（同じものを続けて登録できるように）
+
+    } catch (error) {
+        console.error("Error adding continuous deterioration data:", error);
+        alert("連続登録に失敗しました。");
+    }
+}
+
+// 通常登録成功時に場所と劣化名を記憶する (handleDeteriorationSubmit 内で呼び出す)
+function recordLastAddedData(location, name) {
+    lastAddedLocation = location;
+    lastAddedName = name;
+    console.log("Recorded last added data for continuous add:", { location, name });
+}
+
 // 劣化情報入力フォームの送信処理
 async function handleDeteriorationSubmit(event) {
     event.preventDefault(); // デフォルトのフォーム送信を防止
@@ -551,6 +607,9 @@ async function handleDeteriorationSubmit(event) {
         // push() で新しいユニークIDを生成してデータを保存
         await deteriorationRef.push(newData);
         console.log(`Deterioration data added for ${currentBuildingId}:`, newData);
+
+        // ★ 連続登録用にデータを記録
+        recordLastAddedData(location, name);
 
         // フォームをクリア
         locationInput.value = '';
@@ -740,6 +799,78 @@ async function handleDeleteClick(buildingId, recordId, recordNumber) {
     }
 }
 
+// --- CSV Export --- 
+const exportCsvBtn = document.getElementById('exportCsvBtn');
+
+function generateCsvContent(buildingId) {
+    if (!currentProjectId || !buildingId || !deteriorationData[buildingId]) {
+        alert("エクスポート対象のデータがありません。");
+        return null;
+    }
+
+    const dataToExport = Object.values(deteriorationData[buildingId])
+                              .sort((a, b) => a.number - b.number); // 番号順にソート
+
+    if (dataToExport.length === 0) {
+        alert(`建物「${buildingId}」にはエクスポートするデータがありません。`);
+        return null;
+    }
+
+    // CSVヘッダー
+    const header = ["番号", "場所", "劣化名", "写真番号"];
+    // CSVデータ行 (値をダブルクォートで囲み、内部のダブルクォートは2つにエスケープ)
+    const rows = dataToExport.map(d => [
+        d.number,
+        `"${(d.location || '').replace(/"/g, '""')}"`, 
+        `"${(d.name || '').replace(/"/g, '""')}"`, 
+        `"${(d.photoNumber || '').replace(/"/g, '""')}"`
+    ].join(','));
+
+    // BOM + ヘッダー + データ行
+    const csvContent = "\uFEFF" + header.join(',') + "\n" + rows.join("\n");
+    return csvContent;
+}
+
+function downloadCsv(csvContent, filename) {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) { // feature detection
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url); // メモリ解放
+    } else {
+        alert("お使いのブラウザはCSVダウンロードに対応していません。");
+    }
+}
+
+function handleExportCsv() {
+    if (!currentProjectId) {
+         alert("プロジェクトが特定できません。基本情報を入力してください。");
+         return;
+    }
+    // 現在選択中の建物を対象とする
+    const targetBuildingId = buildingSelect.value; 
+    if (!targetBuildingId) {
+        alert("CSVをダウンロードする建物を選択してください。");
+        return;
+    }
+
+    const csvContent = generateCsvContent(targetBuildingId);
+    if (csvContent) {
+        // ファイル名を生成 (プロジェクトの siteName を使用)
+        const siteName = siteNameInput.value.trim() || 'プロジェクト';
+        const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const safeBuildingName = targetBuildingId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const filename = `${safeSiteName}_${safeBuildingName}_劣化情報.csv`;
+        downloadCsv(csvContent, filename);
+    }
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
   // Set current year in footer
@@ -785,6 +916,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Setup edit form listener
   editForm.addEventListener('submit', handleEditSubmit);
+
+  // Setup continuous add button listener
+  continuousAddBtn.addEventListener('click', handleContinuousAdd);
+
+  // Setup CSV export button listener
+  exportCsvBtn.addEventListener('click', handleExportCsv);
 
   console.log("Initialization complete.");
 
