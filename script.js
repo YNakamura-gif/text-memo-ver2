@@ -49,6 +49,34 @@ let locationPredictions = []; // 部屋名
 let partPredictions = [];     // 部位
 let deteriorationPredictions = []; // 劣化名
 
+// --- Global State ---
+let currentProjectId = null; // 例: "現場A_2024-04-08"
+let currentBuildingId = null; // 例: "A棟"
+let buildings = {}; // { "A棟": true, "B棟": true }
+let lastUsedBuilding = null; // 前回選択した建物を記憶
+
+// --- Firebase Refs ---
+function getProjectBaseRef(projectId) {
+  return database.ref(`projects/${projectId}`);
+}
+function getProjectInfoRef(projectId) {
+  return database.ref(`projects/${projectId}/info`);
+}
+function getBuildingsRef(projectId) {
+  return database.ref(`projects/${projectId}/buildings`);
+}
+// 劣化情報Refは後ほど
+
+// --- Utility Functions ---
+
+// プロジェクトIDを生成 (現場名と調査日から)
+function generateProjectId(siteName, surveyDate) {
+    if (!siteName || !surveyDate) return null;
+    // ファイルパスとして安全な形式に変換 (スペースや特殊文字をアンダースコアに)
+    const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    return `${safeSiteName}_${surveyDate}`;
+}
+
 // --- CSV Parsing and Loading --- 
 
 // CSVテキストを解析して { value, reading } の配列を返す関数
@@ -275,33 +303,223 @@ function switchTab(activeTabId) {
 infoTabBtn.addEventListener('click', () => switchTab('info'));
 detailTabBtn.addEventListener('click', () => switchTab('detail'));
 
+// --- Basic Info Management ---
+const surveyDateInput = document.getElementById('surveyDate');
+const siteNameInput = document.getElementById('siteName');
+const initialBuildingNameInput = document.getElementById('buildingName'); // 初期建物名
+
+// 基本情報をFirebaseに保存
+async function saveBasicInfo() {
+    const siteName = siteNameInput.value.trim();
+    const surveyDate = surveyDateInput.value;
+    const initialBuildingName = initialBuildingNameInput.value.trim();
+
+    if (!siteName || !surveyDate) {
+        // console.log("Site name or survey date is missing. Cannot save basic info or determine Project ID.");
+        return; // 現場名か日付がないとプロジェクトIDが決まらない
+    }
+
+    const newProjectId = generateProjectId(siteName, surveyDate);
+    if (!newProjectId) return;
+
+    currentProjectId = newProjectId;
+    console.log("Current Project ID set to:", currentProjectId);
+
+    const infoData = {
+        surveyDate: surveyDate,
+        siteName: siteName,
+        initialBuildingName: initialBuildingName // 初期建物名も保存
+    };
+
+    try {
+        await getProjectInfoRef(currentProjectId).set(infoData);
+        console.log("Basic info saved for project:", currentProjectId);
+        // プロジェクトIDが変わった可能性があるので、建物のリスナー等を再設定
+        setupBuildingManagementListeners();
+    } catch (error) {
+        console.error("Error saving basic info:", error);
+        alert("基本情報の保存に失敗しました。");
+    }
+}
+
+// アプリ起動時やプロジェクトID変更時に基本情報を読み込む
+async function loadBasicInfo(projectId) {
+    if (!projectId) return;
+    try {
+        const snapshot = await getProjectInfoRef(projectId).once('value');
+        const info = snapshot.val();
+        if (info) {
+            surveyDateInput.value = info.surveyDate || '';
+            siteNameInput.value = info.siteName || '';
+            initialBuildingNameInput.value = info.initialBuildingName || '';
+            console.log("Basic info loaded for project:", projectId);
+        } else {
+            console.log("No basic info found for project:", projectId);
+            // 必要ならフィールドをクリア
+            // surveyDateInput.value = '';
+            // siteNameInput.value = '';
+            // initialBuildingNameInput.value = '';
+        }
+    } catch (error) {
+        console.error("Error loading basic info:", error);
+    }
+}
+
+// 基本情報フィールドの変更を監視して保存
+function setupBasicInfoListeners() {
+    surveyDateInput.addEventListener('change', saveBasicInfo);
+    siteNameInput.addEventListener('change', saveBasicInfo); 
+    initialBuildingNameInput.addEventListener('change', saveBasicInfo);
+}
+
+// --- Building Management ---
+const newBuildingNameInput = document.getElementById('newBuildingName');
+const addBuildingBtn = document.getElementById('addBuildingBtn');
+const buildingSelect = document.getElementById('buildingSelect');
+const activeBuildingNameSpan = document.getElementById('activeBuildingName');
+
+// 建物選択プルダウンを更新
+function updateBuildingSelector(newBuildings) {
+    buildings = newBuildings || {}; // グローバルステート更新
+    const buildingNames = Object.keys(buildings);
+    
+    buildingSelect.innerHTML = ''; // 一旦クリア
+
+    if (buildingNames.length === 0) {
+        const option = document.createElement('option');
+        option.value = "";
+        option.textContent = "建物がありません";
+        buildingSelect.appendChild(option);
+        activeBuildingNameSpan.textContent = "(未選択)";
+        currentBuildingId = null;
+    } else {
+        buildingNames.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            buildingSelect.appendChild(option);
+        });
+
+        // 前回選択した建物があればそれを選択、なければ最初の建物を選択
+        const buildingToSelect = lastUsedBuilding && buildings[lastUsedBuilding] ? lastUsedBuilding : buildingNames[0];
+        buildingSelect.value = buildingToSelect;
+        currentBuildingId = buildingToSelect;
+        activeBuildingNameSpan.textContent = currentBuildingId;
+        console.log("Building selector updated. Selected:", currentBuildingId);
+    }
+    // TODO: 選択された建物に応じて劣化情報表示を更新する処理呼び出し
+}
+
+// 建物追加処理
+async function addBuilding() {
+    if (!currentProjectId) {
+        alert("先に現場名と調査日を入力してプロジェクトを確定してください。");
+        return;
+    }
+    const newName = newBuildingNameInput.value.trim();
+    if (!newName) {
+        alert("建物名を入力してください。");
+        return;
+    }
+    if (buildings[newName]) {
+        alert(`建物「${newName}」は既に追加されています。`);
+        return;
+    }
+
+    try {
+        // Firebaseに新しい建物を追加 (キーを建物名、値をtrue)
+        await getBuildingsRef(currentProjectId).child(newName).set(true);
+        console.log(`Building "${newName}" added to project ${currentProjectId}`);
+        newBuildingNameInput.value = ''; // 入力フィールドクリア
+        // リスナーが変更を検知して updateBuildingSelector が呼ばれるはず
+    } catch (error) {
+        console.error("Error adding building:", error);
+        alert("建物の追加に失敗しました。");
+    }
+}
+
+// Firebaseの建物リストの変更を監視
+let buildingsListener = null;
+function setupBuildingManagementListeners() {
+    if (!currentProjectId) {
+        console.log("Project ID not set, cannot setup building listeners.");
+        updateBuildingSelector(null); // プルダウンをリセット
+        return;
+    }
+
+    // 既存のリスナーがあればデタッチ
+    if (buildingsListener) {
+        getBuildingsRef(currentProjectId).off('value', buildingsListener);
+        console.log("Detached existing buildings listener for old project ID.");
+    }
+
+    console.log("Setting up buildings listener for project:", currentProjectId);
+    const buildingsRef = getBuildingsRef(currentProjectId);
+    buildingsListener = buildingsRef.on('value', (snapshot) => {
+        const newBuildingsData = snapshot.val();
+        console.log("Buildings data received from Firebase:", newBuildingsData);
+        updateBuildingSelector(newBuildingsData); 
+    }, (error) => {
+        console.error("Error listening for building changes:", error);
+        alert("建物リストの取得中にエラーが発生しました。");
+    });
+
+    // プルダウン変更時の処理
+    buildingSelect.addEventListener('change', () => {
+        currentBuildingId = buildingSelect.value;
+        lastUsedBuilding = currentBuildingId; // 最後に選択した建物を記憶
+        activeBuildingNameSpan.textContent = currentBuildingId || "(未選択)";
+        console.log("Building selected:", currentBuildingId);
+        // TODO: 選択された建物に応じて劣化情報表示を更新する処理呼び出し
+    });
+
+    // 建物追加ボタンのリスナー（一度だけ設定）
+    // addBuildingBtn のリスナーは DOMContentLoaded で一度だけ設定する方が良いかもしれない
+    // ここで毎回設定すると重複する可能性があるため注意
+}
+
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', async () => { // async に変更
+document.addEventListener('DOMContentLoaded', async () => {
   // Set current year in footer
   if (currentYearSpan) {
     currentYearSpan.textContent = new Date().getFullYear();
   }
 
   // Initialize with Info tab active
-  switchTab('info'); 
+  switchTab('info');
 
   // Load prediction data (CSV)
-  await loadPredictionData(); // await で読み込み完了を待つ
+  await loadPredictionData();
+  console.log("Prediction data loaded.");
 
-  console.log("Initialization complete. Prediction data loaded.");
-
-  // Setup prediction listeners after data is loaded
+  // Setup prediction listeners
   setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions);
   setupPredictionListeners(deteriorationNameInput, deteriorationPredictionsList, generateDeteriorationPredictions);
   setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions);
   setupPredictionListeners(editDeteriorationNameInput, editDeteriorationPredictionsList, generateDeteriorationPredictions);
 
-  // TODO: Load initial data from Firebase
-  // TODO: Set up other event listeners (forms, buttons etc.)
-  // Example for Edit Modal Cancel Button (if needed later)
-  if (cancelEditBtn) {
-      cancelEditBtn.addEventListener('click', () => {
-          editModal.classList.add('hidden');
-      });
+  // Setup basic info listeners
+  setupBasicInfoListeners();
+
+  // Initial attempt to load basic info based on current form values (if any)
+  const initialSiteName = siteNameInput.value.trim();
+  const initialSurveyDate = surveyDateInput.value;
+  currentProjectId = generateProjectId(initialSiteName, initialSurveyDate);
+  if (currentProjectId) {
+    console.log("Initial Project ID derived from form:", currentProjectId);
+    await loadBasicInfo(currentProjectId);
+    // 初期のプロジェクトIDに基づいて建物のリスナーを開始
+    setupBuildingManagementListeners(); 
+  } else {
+     console.log("Initial project ID could not be determined from form.");
+     updateBuildingSelector(null); // 建物セレクタをリセット
   }
+
+  // Setup building add button listener (once)
+  addBuildingBtn.addEventListener('click', addBuilding);
+
+  console.log("Initialization complete.");
+
+  // TODO: Set up other event listeners (forms, buttons etc.)
+  // ... (cancelEditBtn listener)
 }); 
