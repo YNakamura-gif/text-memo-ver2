@@ -203,6 +203,47 @@
     </div>
   </main>
 
+  <!-- ★★★ 編集モーダルを追加 ★★★ -->
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
+      <h2 class="text-xl font-bold mb-4">劣化情報の編集</h2>
+      <form id="editForm">
+        <!-- 番号 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">番号</label>
+          <div id="editIdDisplay" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-md"></div>
+        </div>
+        <!-- 場所 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">場所</label>
+          <div class="relative">
+            <input id="editLocationInput" type="text" placeholder="場所を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <ul id="editLocationPredictions" class="prediction-list hidden"></ul>
+          </div>
+        </div>
+        <!-- 劣化名 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
+          <div class="relative">
+            <input id="editDeteriorationNameInput" type="text" placeholder="劣化名を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <ul id="editDeteriorationPredictions" class="prediction-list hidden"></ul>
+          </div>
+        </div>
+        <!-- 写真番号 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">写真番号</label>
+          <input id="editPhotoNumberInput" type="text" placeholder="番号" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <!-- ボタン -->
+        <div class="flex justify-end space-x-3 mt-6">
+          <button type="button" id="cancelEditBtn" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">キャンセル</button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- ★★★ モーダル追加ここまで ★★★ -->
+
   <footer class="bg-gray-200 p-3 text-center text-sm text-gray-600 mt-8">
     <p>© <span id="currentYear"></span> 12条点検劣化調査アプリ</p>
   </footer>
