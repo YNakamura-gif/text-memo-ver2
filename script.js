@@ -312,10 +312,9 @@ function renderDeteriorationTable(buildingId, deteriorationTableBodyElement, edi
 // ======================================================================
 
 // --- Basic Info --- 
-async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+async function saveBasicInfo(surveyDateInput, siteNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   const siteName = siteNameInput.value.trim();
   const surveyDate = surveyDateInput.value;
-  const initialBuildingName = initialBuildingNameInput.value.trim();
   if (!siteName) return;
   const newProjectId = generateProjectId(siteName);
   if (!newProjectId) return;
@@ -325,7 +324,7 @@ async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingName
   currentProjectId = newProjectId;
   console.log("Current Project ID set to:", currentProjectId);
   
-  const infoData = { surveyDate, siteName, initialBuildingName };
+  const infoData = { surveyDate, siteName };
   try {
     await getProjectInfoRef(currentProjectId).set(infoData);
     console.log("Basic info saved for project:", currentProjectId);
@@ -339,7 +338,7 @@ async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingName
   }
 }
 
-async function loadBasicInfo(projectId, surveyDateInput, siteNameInput, initialBuildingNameInput) {
+async function loadBasicInfo(projectId, surveyDateInput, siteNameInput) {
   if (!projectId) return;
   try {
     const snapshot = await getProjectInfoRef(projectId).once('value');
@@ -347,21 +346,23 @@ async function loadBasicInfo(projectId, surveyDateInput, siteNameInput, initialB
     if (info) {
       surveyDateInput.value = info.surveyDate || '';
       siteNameInput.value = info.siteName || '';
-      initialBuildingNameInput.value = info.initialBuildingName || '';
       console.log("Basic info loaded for project:", projectId);
     } else {
       console.log("No basic info found for project:", projectId);
+      surveyDateInput.value = '';
+      siteNameInput.value = '';
     }
   } catch (error) {
     console.error("Error loading basic info:", error);
+    surveyDateInput.value = '';
+    siteNameInput.value = '';
   }
 }
 
-function setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
-  const saveHandler = () => saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+function setupBasicInfoListeners(surveyDateInput, siteNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  const saveHandler = () => saveBasicInfo(surveyDateInput, siteNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   surveyDateInput.addEventListener('change', saveHandler);
   siteNameInput.addEventListener('change', saveHandler);
-  initialBuildingNameInput.addEventListener('change', saveHandler);
   console.log("[setupBasicInfoListeners] Listeners attached.");
 }
 
@@ -695,7 +696,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const currentYearSpan = document.getElementById('currentYear');
   const surveyDateInput = document.getElementById('surveyDate');
   const siteNameInput = document.getElementById('siteName');
-  const initialBuildingNameInput = document.getElementById('buildingName');
   const newBuildingNameInput = document.getElementById('newBuildingName');
   const addBuildingBtn = document.getElementById('addBuildingBtn');
   const buildingSelect = document.getElementById('buildingSelect');
@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentProjectId = generateProjectId(initialSiteName);
   if (currentProjectId) {
     console.log("Initial Project ID derived from form:", currentProjectId);
-    await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput, initialBuildingNameInput);
+    await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput);
     await setupBuildingManagementListeners(buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   } else {
     console.log("Initial project ID could not be determined from form.");
@@ -754,7 +754,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPredictionListeners(editDeteriorationNameInput, editDeteriorationPredictionsList, generateDeteriorationPredictions);
   
   // Basic Info
-  setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+  setupBasicInfoListeners(surveyDateInput, siteNameInput, buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   
   // Building Add
   addBuildingBtn.addEventListener('click', () => addBuilding(newBuildingNameInput));
