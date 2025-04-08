@@ -55,10 +55,10 @@ function getDeteriorationCounterRef(projectId, buildingId) {
 // ======================================================================
 // 4. Utility Functions
 // ======================================================================
-function generateProjectId(siteName, surveyDate) {
-    if (!siteName || !surveyDate) return null;
+function generateProjectId(siteName) {
+    if (!siteName) return null;
     const safeSiteName = siteName.replace(/[.#$\[\]]/g, '_'); 
-    return `${safeSiteName}_${surveyDate}`;
+    return safeSiteName;
 }
 
 function escapeHtml(unsafe) {
@@ -316,8 +316,8 @@ async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingName
   const siteName = siteNameInput.value.trim();
   const surveyDate = surveyDateInput.value;
   const initialBuildingName = initialBuildingNameInput.value.trim();
-  if (!siteName || !surveyDate) return;
-  const newProjectId = generateProjectId(siteName, surveyDate);
+  if (!siteName) return;
+  const newProjectId = generateProjectId(siteName);
   if (!newProjectId) return;
   
   // Check if Project ID actually changed
@@ -732,8 +732,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Try to determine initial project ID and load data
   const initialSiteName = siteNameInput.value.trim();
-  const initialSurveyDate = surveyDateInput.value;
-  currentProjectId = generateProjectId(initialSiteName, initialSurveyDate);
+  currentProjectId = generateProjectId(initialSiteName);
   if (currentProjectId) {
     console.log("Initial Project ID derived from form:", currentProjectId);
     await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput, initialBuildingNameInput);
