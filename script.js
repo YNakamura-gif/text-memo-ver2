@@ -273,7 +273,7 @@ async function updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement) 
   }
 }
 
-function renderDeteriorationTable(buildingId, deteriorationTableBodyElement, editModalElement) {
+function renderDeteriorationTable(buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   console.log(`[renderDeteriorationTable] Rendering table for buildingId: ${buildingId}`); 
   console.log(`[renderDeteriorationTable] Current global currentBuildingId: ${currentBuildingId}`); 
   deteriorationTableBodyElement.innerHTML = ''; 
@@ -299,7 +299,7 @@ function renderDeteriorationTable(buildingId, deteriorationTableBodyElement, edi
           <button class="text-red-600 hover:text-red-900 delete-btn">削除</button>
         </td>
       `;
-      tr.querySelector('.edit-btn').addEventListener('click', () => handleEditClick(buildingId, record.id, editModalElement));
+      tr.querySelector('.edit-btn').addEventListener('click', () => handleEditClick(buildingId, record.id, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput));
       tr.querySelector('.delete-btn').addEventListener('click', () => handleDeleteClick(buildingId, record.id, record.number));
       deteriorationTableBodyElement.appendChild(tr);
     });
@@ -312,7 +312,7 @@ function renderDeteriorationTable(buildingId, deteriorationTableBodyElement, edi
 // ======================================================================
 
 // --- Basic Info --- 
-async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput) {
+async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   const siteName = siteNameInput.value.trim();
   const surveyDate = surveyDateInput.value;
   const initialBuildingName = initialBuildingNameInput.value.trim();
@@ -331,7 +331,7 @@ async function saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingName
     console.log("Basic info saved for project:", currentProjectId);
     if (projectIdChanged) {
       console.log("Project ID changed, re-setting building listeners.");
-      await setupBuildingManagementListeners(); // Make sure this returns a promise if needed, or handles async internally
+      await setupBuildingManagementListeners(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     }
   } catch (error) {
     console.error("Error saving basic info:", error);
@@ -357,9 +357,8 @@ async function loadBasicInfo(projectId, surveyDateInput, siteNameInput, initialB
   }
 }
 
-function setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput) {
-  // Use arrow functions to pass elements to saveBasicInfo
-  const saveHandler = () => saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput);
+function setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  const saveHandler = () => saveBasicInfo(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   surveyDateInput.addEventListener('change', saveHandler);
   siteNameInput.addEventListener('change', saveHandler);
   initialBuildingNameInput.addEventListener('change', saveHandler);
@@ -391,7 +390,7 @@ async function addBuilding(newBuildingNameInput) {
   }
 }
 
-function updateBuildingSelector(newBuildings, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement) {
+function updateBuildingSelector(newBuildings, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   console.log("[updateBuildingSelector] Updating selector with:", newBuildings);
   buildings = newBuildings || {};
   const buildingNames = Object.keys(buildings);
@@ -405,7 +404,7 @@ function updateBuildingSelector(newBuildings, buildingSelectElement, activeBuild
     buildingSelectElement.appendChild(option);
     activeBuildingNameSpanElement.textContent = "(未選択)";
     currentBuildingId = null;
-    renderDeteriorationTable(null, deteriorationTableBodyElement, editModalElement);
+    renderDeteriorationTable(null, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   } else {
     buildingNames.forEach(name => {
       const option = document.createElement('option');
@@ -413,7 +412,7 @@ function updateBuildingSelector(newBuildings, buildingSelectElement, activeBuild
       option.textContent = name;
       buildingSelectElement.appendChild(option);
       console.log(`[updateBuildingSelector] Setting up listener for building: ${name}`);
-      setupDeteriorationListener(currentProjectId, name, deteriorationTableBodyElement, editModalElement); // Pass elements
+      setupDeteriorationListener(currentProjectId, name, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     });
     const buildingToSelect = lastUsedBuilding && buildings[lastUsedBuilding] ? lastUsedBuilding : buildingNames[0];
     buildingSelectElement.value = buildingToSelect;
@@ -421,16 +420,16 @@ function updateBuildingSelector(newBuildings, buildingSelectElement, activeBuild
     activeBuildingNameSpanElement.textContent = currentBuildingId;
     console.log("[updateBuildingSelector] Building selector updated. Selected:", currentBuildingId);
     console.log(`[updateBuildingSelector] Calling initial renderDeteriorationTable for selected building: ${currentBuildingId}`);
-    renderDeteriorationTable(currentBuildingId, deteriorationTableBodyElement, editModalElement);
+    renderDeteriorationTable(currentBuildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
   }
 }
 
 // Needs to be async if await is used inside
-async function setupBuildingManagementListeners(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement) {
+async function setupBuildingManagementListeners(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   if (!currentProjectId) {
     console.log("Project ID not set, cannot setup building listeners.");
-    updateBuildingSelector(null, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement); 
+    updateBuildingSelector(null, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     return;
   }
   if (buildingsListener) {
@@ -446,20 +445,19 @@ async function setupBuildingManagementListeners(buildingSelectElement, activeBui
   buildingsRef.on('value', (snapshot) => {
     const newBuildingsData = snapshot.val();
     console.log("[Callback] Buildings data received from Firebase:", newBuildingsData);
-    // Pass necessary elements to updateBuildingSelector
-    updateBuildingSelector(newBuildingsData, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement);
+    updateBuildingSelector(newBuildingsData, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   }, (error) => {
     console.error("Error listening for building changes:", error);
     alert("建物リストの取得中にエラーが発生しました。");
   });
   // Setup change listener here, passing elements
-  const changeHandler = () => handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement);
+  const changeHandler = () => handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   buildingSelectElement.removeEventListener('change', changeHandler); // Ensure no duplicates
   buildingSelectElement.addEventListener('change', changeHandler);
   console.log("[setupBuildingManagementListeners] Building select change listener attached.");
 }
 
-function handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement) {
+function handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   const newlySelectedBuildingId = buildingSelectElement.value;
   console.log(`[handleBuildingSelectChange] Changed to: ${newlySelectedBuildingId}`);
   if (newlySelectedBuildingId === currentBuildingId) {
@@ -472,12 +470,12 @@ function handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpa
   console.log(`[handleBuildingSelectChange] Current building set to: ${currentBuildingId}`);
   if (currentBuildingId) {
     console.log(`[handleBuildingSelectChange] Calling renderDeteriorationTable for: ${currentBuildingId}`);
-    renderDeteriorationTable(currentBuildingId, deteriorationTableBodyElement, editModalElement);
+    renderDeteriorationTable(currentBuildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     console.log(`[handleBuildingSelectChange] Calling updateNextIdDisplay for: ${currentBuildingId}`);
     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
   } else {
     console.log("[handleBuildingSelectChange] No building selected, clearing table.");
-    renderDeteriorationTable(null, deteriorationTableBodyElement, editModalElement);
+    renderDeteriorationTable(null, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     updateNextIdDisplay(null, null, nextIdDisplayElement);
   }
 }
@@ -522,7 +520,7 @@ async function handleDeteriorationSubmit(event, locationInput, deteriorationName
   }
 }
 
-function setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement) {
+function setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   if (!projectId || !buildingId) return;
   console.log(`---> [setupDeteriorationListener] Attempting to attach listener for ${buildingId} in project ${projectId}`); 
   const ref = getDeteriorationsRef(projectId, buildingId);
@@ -539,7 +537,7 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
     console.log(`[Listener Callback] Updated local deteriorationData[${buildingId}]:`, deteriorationData[buildingId]); 
     if (buildingId === currentBuildingId) {
       console.log(`[Listener Callback] Calling renderDeteriorationTable for current building: ${buildingId}`); 
-      renderDeteriorationTable(buildingId, deteriorationTableBodyElement, editModalElement); // Pass elements
+      renderDeteriorationTable(buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
     } else {
       console.log(`[Listener Callback] Data received for non-current building ${buildingId}, current is ${currentBuildingId}. Skipping render.`); 
     }
@@ -566,7 +564,7 @@ function detachAllDeteriorationListeners() {
 }
 
 // --- Edit/Delete --- 
-function handleEditClick(buildingId, recordId, editModalElement) {
+function handleEditClick(buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   if (!deteriorationData[buildingId] || !deteriorationData[buildingId][recordId]) {
     console.error(`Record ${recordId} not found for building ${buildingId}`); return;
   }
@@ -739,10 +737,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (currentProjectId) {
     console.log("Initial Project ID derived from form:", currentProjectId);
     await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput, initialBuildingNameInput);
-    await setupBuildingManagementListeners(buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal);
+    await setupBuildingManagementListeners(buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   } else {
     console.log("Initial project ID could not be determined from form.");
-    updateBuildingSelector(null, buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal);
+    updateBuildingSelector(null, buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   }
 
   // --- Setup Event Listeners --- 
@@ -757,7 +755,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupPredictionListeners(editDeteriorationNameInput, editDeteriorationPredictionsList, generateDeteriorationPredictions);
   
   // Basic Info
-  setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput);
+  setupBasicInfoListeners(surveyDateInput, siteNameInput, initialBuildingNameInput, buildingSelect, activeBuildingNameSpan, nextIdDisplay, deteriorationTableBody, editModal, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   
   // Building Add
   addBuildingBtn.addEventListener('click', () => addBuilding(newBuildingNameInput));
