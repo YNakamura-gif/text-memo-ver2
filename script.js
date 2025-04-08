@@ -291,11 +291,11 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
       const tr = document.createElement('tr');
       tr.dataset.recordId = record.id; 
       tr.innerHTML = `
-        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${record.number}</td>
-        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.location)}</td>
-        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.name)}</td>
-        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">${escapeHtml(record.photoNumber)}</td>
-        <td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">${record.number}</td>
+        <td class="px-2 py-2 text-sm text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">${escapeHtml(record.location)}</td>
+        <td class="px-2 py-2 text-sm text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">${escapeHtml(record.name)}</td>
+        <td class="px-2 py-2 text-sm text-gray-500">${escapeHtml(record.photoNumber)}</td>
+        <td class="px-2 py-2 text-right text-sm font-medium whitespace-nowrap">
           <button class="text-indigo-600 hover:text-indigo-900 mr-2 edit-btn">編集</button>
           <button class="text-red-600 hover:text-red-900 delete-btn">削除</button>
         </td>
