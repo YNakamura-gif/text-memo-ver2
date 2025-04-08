@@ -191,6 +191,18 @@
             <!-- 劣化情報の行がJSで動的に追加されます -->
           </tbody>
         </table>
+
+        <!-- ★★★ CSV出力ボタンをここに追加 ★★★ -->
+        <div class="mt-6">
+          <button
+            id="exportCsvBtn"
+            class="bg-green-600 text-white p-3 rounded-md w-full font-medium hover:bg-green-700"
+          >
+            CSVファイルでダウンロード
+          </button>
+        </div>
+        <!-- ★★★ 追加ここまで ★★★ -->
+
       </div>
     </div>
 
@@ -260,16 +272,6 @@
           </div>
         </form>
       </div>
-    </div>
-
-    <!-- CSV出力ボタン -->
-    <div class="mt-8">
-      <button
-        id="exportCsvBtn"
-        class="bg-green-600 text-white p-3 rounded-md w-full font-medium"
-      >
-        CSVファイルでダウンロード
-      </button>
     </div>
   </main>
 

@@ -327,13 +327,24 @@ async function loadProjectsAndSetupSelector(projectSelectElement, buildingSelect
             });
             const projectsList = await Promise.all(projectPromises);
             projectsList.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+
+            // ★ 重複排除ロジックを追加
+            const addedNames = new Set(); // 追加済みの現場名を記録するSet
             projectsList.forEach(project => {
-                const option = document.createElement('option');
-                option.value = project.id;
-                option.textContent = project.name;
-                projectSelectElement.appendChild(option);
+                // まだ追加されていない現場名の場合のみオプションを追加
+                if (!addedNames.has(project.name)) {
+                    const option = document.createElement('option');
+                    option.value = project.id; // value には projectId を保持
+                    option.textContent = project.name;
+                    projectSelectElement.appendChild(option);
+                    addedNames.add(project.name); // 追加済みとして記録
+                } else {
+                    // 重複する現場名が見つかった場合の処理（例：コンソールに警告）
+                    console.warn(`[loadProjectsAndSetupSelector] Duplicate site name found: "${project.name}" (Project ID: ${project.id} was skipped)`);
+                }
             });
-            console.log(`[loadProjectsAndSetupSelector] Loaded ${projectsList.length} projects.`);
+            // ★ 重複排除ここまで
+            console.log(`[loadProjectsAndSetupSelector] Loaded ${projectsList.length} unique projects.`);
         } else {
             console.log("[loadProjectsAndSetupSelector] No projects found.");
         }
@@ -646,45 +657,6 @@ async function handleContinuousAdd(photoNumberInput, nextIdDisplayElement) {
   }
 }
 
-function generateCsvContent(buildingId) {
-  if (!currentProjectId || !buildingId || !deteriorationData[buildingId]) { alert("エクスポート対象のデータがありません。"); return null; }
-  const dataToExport = Object.values(deteriorationData[buildingId]).sort((a, b) => a.number - b.number);
-  if (dataToExport.length === 0) { alert(`建物「${buildingId}」にはエクスポートするデータがありません。`); return null; }
-  const header = ["番号", "場所", "劣化名", "写真番号"];
-  const rows = dataToExport.map(d => [d.number, `"${(d.location || '').replace(/"/g, '""')}"`, `"${(d.name || '').replace(/"/g, '""')}"`, `"${(d.photoNumber || '').replace(/"/g, '""')}"`].join(','));
-  const csvContent = "\uFEFF" + header.join(',') + "\n" + rows.join("\n");
-  return csvContent;
-}
-
-function downloadCsv(csvContent, filename) {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement("a");
-  if (link.download !== undefined) { 
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url); 
-  } else { alert("お使いのブラウザはCSVダウンロードに対応していません。"); }
-}
-
-function handleExportCsv(projectSelectElement, buildingSelectElement) {
-  if (!currentProjectId) { alert("プロジェクトが特定できません。基本情報を入力してください。"); return; }
-  const targetBuildingId = buildingSelectElement.value;
-  if (!targetBuildingId) { alert("CSVをダウンロードする建物を選択してください。"); return; }
-  const csvContent = generateCsvContent(targetBuildingId);
-  if (csvContent) {
-    const siteName = projectSelectElement.value.trim() || 'プロジェクト';
-    const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const safeBuildingName = targetBuildingId.replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const filename = `${safeSiteName}_${safeBuildingName}_劣化情報.csv`;
-    downloadCsv(csvContent, filename);
-  }
-}
-
 // ======================================================================
 // 10. Listener Setup Functions
 // ======================================================================
@@ -873,4 +845,46 @@ async function initializeApp() {
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => handleExportCsv(projectSelectElement, buildingSelectElement));
 
     console.log("Initialization complete.");
+}
+
+// ★★★ generateCsvContent 関数定義のコメントアウトを解除 ★★★
+function generateCsvContent(buildingId) {
+    if (!currentProjectId || !buildingId || !deteriorationData[buildingId]) { alert("エクスポート対象のデータがありません。"); return null; }
+    const dataToExport = Object.values(deteriorationData[buildingId]).sort((a, b) => a.number - b.number);
+    if (dataToExport.length === 0) { alert(`建物「${buildingId}」にはエクスポートするデータがありません。`); return null; }
+    const header = ["番号", "場所", "劣化名", "写真番号"];
+    const rows = dataToExport.map(d => [d.number, `"${(d.location || '').replace(/"/g, '""')}"`, `"${(d.name || '').replace(/"/g, '""')}"`, `"${(d.photoNumber || '').replace(/"/g, '""')}"`].join(','));
+    const csvContent = "\uFEFF" + header.join(',') + "\n" + rows.join("\n");
+    return csvContent;
+}
+
+// ★★★ downloadCsv 関数定義のコメントアウトを解除 ★★★
+function downloadCsv(csvContent, filename) {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) { 
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url); 
+    } else { alert("お使いのブラウザはCSVダウンロードに対応していません。"); }
+}
+
+// ★★★ handleExportCsv 関数定義のコメントアウトを解除 ★★★
+function handleExportCsv(projectSelectElement, buildingSelectElement) {
+    if (!currentProjectId) { alert("プロジェクトが特定できません。基本情報を入力してください。"); return; }
+    const targetBuildingId = buildingSelectElement.value;
+    if (!targetBuildingId) { alert("CSVをダウンロードする建物を選択してください。"); return; }
+    const csvContent = generateCsvContent(targetBuildingId);
+    if (csvContent) {
+      const siteName = projectSelectElement.options[projectSelectElement.selectedIndex].text || 'プロジェクト'; // Get selected project name
+      const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const safeBuildingName = buildingSelectElement.options[buildingSelectElement.selectedIndex].text.replace(/[^a-zA-Z0-9_\-]/g, '_'); // Get selected building name
+      const filename = `${safeSiteName}_${safeBuildingName}_劣化情報.csv`;
+      downloadCsv(csvContent, filename);
+    }
 } 
