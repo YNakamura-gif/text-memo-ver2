@@ -300,13 +300,12 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     showPredictions(inputElement, predictionListElement, predictions);
   });
   
-  /* ★★★ 一時的にblurイベントリスナー全体をコメントアウト ★★★
+  // ★★★ blurイベントリスナーのコメントアウトを解除 ★★★
   inputElement.addEventListener('blur', () => {
-    // ★ blur で隠す処理を元に戻す (300ms待機)
+    // ★ blur で隠す処理 (300ms待機)
     setTimeout(() => hidePredictions(predictionListElement), 300);
-    // console.log("[Debug] Blur event triggered, hidePredictions timeout re-enabled (300ms)."); 
   });
-  ★★★ ここまでコメントアウト ★★★ */
+  // ★★★ ここまで ★★★
   
   inputElement.addEventListener('focus', () => {
     const inputText = inputElement.value;
