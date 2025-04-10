@@ -261,16 +261,35 @@ function generateDeteriorationPredictions(inputText) {
 
 function showPredictions(inputElement, predictionListElement, predictions) {
   console.log(`[showPredictions] Received ${predictions.length} predictions for input: ${inputElement.id}`);
+  
+  // ★★★ デバッグ: 強制的にテキストを表示してみる ★★★
+  try {
+    if (predictionListElement) {
+      predictionListElement.innerHTML = '<li class="px-3 py-2 list-none">テスト表示</li>'; // 固定テキストを設定 (スタイルも適用)
+      predictionListElement.classList.remove('hidden'); // hiddenを確実に外す
+      console.log('[Debug] Force showing predictionListElement with test text. Element:', predictionListElement);
+    } else {
+      console.error('[Debug] predictionListElement is null or undefined!');
+    }
+  } catch (e) {
+    console.error('[Debug] Error during force show:', e);
+  }
+  // ★★★ ここまで ★★★
+
+  // 元の処理はいったんここで終了させる
+  return; 
+
+  /* // 元の候補リスト生成処理はコメントアウト
   predictionListElement.innerHTML = '';
   if (predictions.length > 0) {
     predictions.forEach(prediction => {
       const li = document.createElement('li');
       li.textContent = prediction;
       li.classList.add(
-        'px-3', 'py-2',
-        'cursor-pointer',
+        'px-3', 'py-2', 
+        'cursor-pointer', 
         'hover:bg-blue-100',
-        'list-none'
+        'list-none' 
       ); 
       console.log(`[showPredictions] Creating li element:`, li);
       li.addEventListener('mousedown', () => {
@@ -287,6 +306,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
     console.log(`[showPredictions] Hiding prediction list (no predictions) for: ${inputElement.id}`); 
     predictionListElement.classList.add('hidden');
   }
+  */
 }
 
 function hidePredictions(predictionListElement) {
