@@ -262,27 +262,11 @@ function generateDeteriorationPredictions(inputText) {
 function showPredictions(inputElement, predictionListElement, predictions) {
   console.log(`[showPredictions] Received ${predictions.length} predictions for input: ${inputElement.id}`);
   
-  // ★★★ デバッグ: 強制的にテキストを表示してみる ★★★
-  try {
-    if (predictionListElement) {
-      predictionListElement.innerHTML = '<li class="px-3 py-2 list-none">テスト表示</li>'; // 固定テキストを設定 (スタイルも適用)
-      predictionListElement.classList.remove('hidden'); // hiddenを確実に外す
-      console.log('[Debug] Force showing predictionListElement with test text. Element:', predictionListElement);
-    } else {
-      console.error('[Debug] predictionListElement is null or undefined!');
-    }
-  } catch (e) {
-    console.error('[Debug] Error during force show:', e);
-  }
-  // ★★★ ここまで ★★★
-
-  // 元の処理はいったんここで終了させる
-  return; 
-
-  /* // 元の候補リスト生成処理はコメントアウト
+  // 元の候補リスト生成処理に戻す
   predictionListElement.innerHTML = '';
   if (predictions.length > 0) {
-    predictions.forEach(prediction => {
+    predictions.forEach((prediction, index) => { // ★ indexも取得
+      console.log(`[Debug Loop ${index}] Prediction: "${prediction}"`); // ★ ループ内のログ
       const li = document.createElement('li');
       li.textContent = prediction;
       li.classList.add(
@@ -291,14 +275,22 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         'hover:bg-blue-100',
         'list-none' 
       ); 
-      console.log(`[showPredictions] Creating li element:`, li);
+      console.log(`[Debug Loop ${index}] Creating li element:`, li); // ★ 生成したliをログ
+      
+      // イベントリスナーを追加
       li.addEventListener('mousedown', () => {
         console.log(`[showPredictions] Prediction clicked: "${prediction}"`); 
         inputElement.value = prediction;
         predictionListElement.classList.add('hidden');
         predictionListElement.innerHTML = ''; 
       });
-      predictionListElement.appendChild(li);
+
+      try {
+        predictionListElement.appendChild(li); // ここで追加
+        console.log(`[Debug Loop ${index}] Appended li successfully.`); // ★ 追加成功ログ
+      } catch (e) {
+        console.error(`[Debug Loop ${index}] Error appending li:`, e, li); // ★ 追加失敗ログ
+      }
     });
     console.log(`[showPredictions] Showing prediction list for: ${inputElement.id}`);
     predictionListElement.classList.remove('hidden');
@@ -306,7 +298,6 @@ function showPredictions(inputElement, predictionListElement, predictions) {
     console.log(`[showPredictions] Hiding prediction list (no predictions) for: ${inputElement.id}`); 
     predictionListElement.classList.add('hidden');
   }
-  */
 }
 
 function hidePredictions(predictionListElement) {
@@ -320,7 +311,7 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     showPredictions(inputElement, predictionListElement, predictions);
   });
   
-  // ★★★ blurイベントリスナーのコメントアウトを解除 ★★★
+  // ★★★ blurイベントリスナーを元に戻す ★★★
   inputElement.addEventListener('blur', () => {
     // ★ blur で隠す処理 (300ms待機)
     setTimeout(() => hidePredictions(predictionListElement), 300);
