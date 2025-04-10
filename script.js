@@ -299,11 +299,15 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     const predictions = generatorFn(inputText);
     showPredictions(inputElement, predictionListElement, predictions);
   });
+  
+  /* ★★★ 一時的にblurイベントリスナー全体をコメントアウト ★★★
   inputElement.addEventListener('blur', () => {
     // ★ blur で隠す処理を元に戻す (300ms待機)
     setTimeout(() => hidePredictions(predictionListElement), 300);
-    // console.log("[Debug] Blur event triggered, hidePredictions timeout re-enabled (300ms)."); // デバッグ用ログは不要になったので削除
+    // console.log("[Debug] Blur event triggered, hidePredictions timeout re-enabled (300ms)."); 
   });
+  ★★★ ここまでコメントアウト ★★★ */
+  
   inputElement.addEventListener('focus', () => {
     const inputText = inputElement.value;
     if(inputText.trim()) { 
