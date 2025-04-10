@@ -169,50 +169,49 @@ async function loadPredictionData() {
 function generateLocationPredictions(inputText) {
   console.log(`[generateLocationPredictions] Input: "${inputText}"`);
 
-  // ★ 修正: 階数指定の判定と分割
   let floorPrefix = '';
-  let searchTermRaw = inputText.trim(); // 元の検索語（数字を含む可能性あり）
+  let searchTermRaw = inputText.trim(); 
+  console.log(`[Debug] Initial searchTermRaw: "${searchTermRaw}"`); // ★ 追加
+
   // 正規表現: 先頭が数字1桁以上 (^\d+) で、その後ろに文字が続く (.+)
   const floorMatch = searchTermRaw.match(/^(\d+)(.+)$/);
+  console.log("[Debug] floorMatch result:", floorMatch); // ★ 追加: 正規表現のマッチ結果
 
   if (floorMatch && floorMatch[1] && floorMatch[2]) {
-    // 先頭に数字があり、その後ろに場所の読みと思われる文字がある場合
-    floorPrefix = floorMatch[1] + "F "; // 例: "1F " や "10F "
-    searchTermRaw = floorMatch[2]; // 検索対象は数字以降の部分
+    floorPrefix = floorMatch[1] + "F "; 
+    searchTermRaw = floorMatch[2]; 
     console.log(`[generateLocationPredictions] Floor detected: '${floorPrefix}', Search term adjusted to: '${searchTermRaw}'`);
   } else {
-    // 数字で始まらないか、数字のみの入力の場合
     console.log("[generateLocationPredictions] No floor prefix detected or input is only numbers.");
+    // ★ 追加: 全角数字の可能性も考慮する (簡易チェック)
+    if (searchTermRaw.match(/^[０-９]+/)) {
+        console.warn("[Debug] Full-width number detected at the beginning. Regex might need adjustment.");
+    }
   }
 
-  // 検索語をひらがなに変換 (検索対象が空なら何もしない)
   const searchTermHiragana = searchTermRaw ? katakanaToHiragana(searchTermRaw.toLowerCase()) : '';
+  console.log(`[Debug] searchTermHiragana: "${searchTermHiragana}"`); // ★ 追加
+  
   if (!searchTermHiragana) {
-      // 階数指定のみで場所の読みがない場合などは空を返す
       console.log("[generateLocationPredictions] No valid search term after processing floor prefix.");
       return [];
   }
-
 
   console.log(`[generateLocationPredictions] Searching locationPredictions (${locationPredictions.length} items) with term: '${searchTermHiragana}'`);
 
   const filtered = locationPredictions
     .filter(item => {
       const readingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
-      // 読み仮名が検索語で始まるかチェック
       return readingHiragana.startsWith(searchTermHiragana);
     })
     .map(item => {
-      // ★ 修正: 階数指定があった場合はプレフィックスを付与して返す
       return floorPrefix + item.value;
     });
 
   console.log(`[generateLocationPredictions] Filtered count: ${filtered.length}`);
   if (filtered.length > 0) console.log("[generateLocationPredictions] Filtered results sample:", filtered.slice(0, 5));
 
-  // 階数プレフィックスが付くため、結果の重複は基本的に発生しないはず
-  // const uniqueResults = [...new Set(filtered)];
-  return filtered.slice(0, 10); // Setを通さずにそのまま返す
+  return filtered.slice(0, 10); 
 }
 
 function generateDeteriorationPredictions(inputText) {
