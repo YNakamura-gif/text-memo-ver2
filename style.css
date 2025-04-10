@@ -64,4 +64,30 @@ textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
-} 
+}
+
+/* 予測変換候補のスタイル */
+#suggestions {
+    position: absolute; /* 入力欄の直下に表示 */
+    left: 0;
+    right: 0;
+    border: 1px solid #ccc;
+    background-color: white;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 1000; /* 他の要素より手前に */
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.875rem; /* 少し小さめの文字 */
+    color: #374151; /* テキスト色 */
+}
+
+.suggestion-item:hover {
+    background-color: #f3f4f6; /* ホバー時の背景色 (Tailwind gray-100) */
+}
+
+/* 既存の prediction-list スタイルと区別/調整が必要な場合 */
+/* .prediction-list { ... } */ 

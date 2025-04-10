@@ -19,8 +19,7 @@ const database = firebase.database();
 // 2. Global State & Prediction Data Storage
 // ======================================================================
 let locationPredictions = [];
-let partPredictions = [];
-let deteriorationPredictions = [];
+let degradationItemsData = []; // 新しい劣化項目データ用
 
 let currentProjectId = null;
 let currentBuildingId = null;
@@ -77,55 +76,68 @@ function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
  }
 
+// ★ NEW: Katakana to Hiragana converter function
+function katakanaToHiragana(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[ァ-ヶ]/g, match => {
+    const chr = match.charCodeAt(0) - 0x60;
+    return String.fromCharCode(chr);
+  });
+}
+
 // ======================================================================
 // 5. Data Loading/Parsing (CSV, Predictions)
 // ======================================================================
-function parseCsv(csvText) {
+function parseCsv(csvText, expectedColumns) {
+  console.log("[parseCsv] Starting parse. Expected columns:", expectedColumns);
+  console.log("[parseCsv] Received text (first 100 chars):", csvText.substring(0, 100)); // ★ 追加：受け取ったテキストの先頭を表示
   const lines = csvText.trim().split(/\r?\n/);
   if (lines.length <= 1) {
     console.warn("CSV file has no data or only a header.");
     return []; 
   }
-  lines.shift(); // Skip header
-  return lines.map((line) => {
+  const header = lines.shift().split(','); 
+  console.log("[parseCsv] Header:", header);
+  if (header.length < expectedColumns) {
+      console.warn(`CSV header has fewer columns (${header.length}) than expected (${expectedColumns}).`);
+  }
+
+  return lines.map((line, index) => { // ★ 追加：行番号もログに出す
     const values = line.split(',');
-    const value = values[0]?.trim();
-    const reading = values[1]?.trim();
-    if (value) {
-      return { value: value, reading: reading || '' };
+    console.log(`[parseCsv] Line ${index + 1} values:`, values); // ★ 追加：パースした各行の配列を表示
+    if (expectedColumns === 2) { 
+      const value = values[0]?.trim();
+      const reading = values[1]?.trim();
+      return value ? { value: value, reading: reading || '' } : null;
+    } else if (expectedColumns === 3) { 
+      const name = values[0]?.trim();
+      const code = values[1]?.trim();
+      const reading = values[2]?.trim();
+      return name ? { name: name, code: code || '', reading: reading || '' } : null;
     } else {
+      console.warn(`Unsupported expectedColumns: ${expectedColumns}`);
       return null;
     }
   }).filter(item => item !== null);
 }
 
-async function fetchAndParseCsv(filePath) {
+async function fetchAndParseCsv(filePath, expectedColumns) { 
+  console.log(`Fetching CSV from: ${filePath}`);
   try {
     const response = await fetch(filePath);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status} for ${filePath}`);
     }
     const buffer = await response.arrayBuffer();
-    let decoder = new TextDecoder('shift_jis', { fatal: true });
-    let text = '';
-    try {
-      text = decoder.decode(buffer);
-      console.log(`Successfully decoded ${filePath} with shift_jis.`);
-    } catch (e) {
-      console.warn(`Failed to decode ${filePath} with shift_jis, trying cp932... Error: ${e.message}`);
-      try {
-          decoder = new TextDecoder('cp932', { fatal: true });
-          text = decoder.decode(buffer);
-          console.log(`Successfully decoded ${filePath} with cp932.`);
-      } catch (e2) {
-           console.error(`Failed to decode ${filePath} with both shift_jis and cp932. Error: ${e2.message}`);
-           throw new Error(`Failed to decode ${filePath}. Check file encoding.`); 
-      }
-    }
+    const decoder = new TextDecoder('utf-8');
+    let text = decoder.decode(buffer);
+    console.log(`[fetchAndParseCsv] Decoded text (first 200 chars) from ${filePath}:`, text.substring(0, 200)); // ★ 追加：デコード直後のテキストを表示
+    console.log(`[fetchAndParseCsv] First char code: ${text.charCodeAt(0)} (BOM check: 65279 is BOM)`); // ★ 追加：BOM確認用ログ
     if (text.charCodeAt(0) === 0xFEFF) {
-        text = text.slice(1);
+      console.log("[fetchAndParseCsv] BOM detected and removed."); // ★ 追加
+      text = text.slice(1);
     }
-    return parseCsv(text);
+    return parseCsv(text, expectedColumns); 
   } catch (error) {
     console.error(`Error fetching or parsing CSV ${filePath}:`, error);
     return [];
@@ -135,14 +147,16 @@ async function fetchAndParseCsv(filePath) {
 async function loadPredictionData() {
   console.log("Loading prediction data...");
   try {
-    [locationPredictions, partPredictions, deteriorationPredictions] = await Promise.all([
-      fetchAndParseCsv('./部屋名_読み付き.csv'),
-      fetchAndParseCsv('./劣化項目_【部位】_読み付き.csv'), 
-      fetchAndParseCsv('./劣化項目_【劣化名】_読み付き.csv')
+    // Promise.all を使って並列読み込み
+    [locationPredictions, degradationItemsData] = await Promise.all([
+      fetchAndParseCsv('./部屋名_読み付き.csv', 2),       // 場所データは2列期待
+      fetchAndParseCsv('./劣化項目_読み付き.csv', 3)     // 劣化項目データは3列期待
     ]);
+    // 古い部位・劣化名のログを削除
     console.log(`Loaded ${locationPredictions.length} location predictions (Rooms).`);
-    console.log(`Loaded ${partPredictions.length} part predictions (Building Parts).`);
-    console.log(`Loaded ${deteriorationPredictions.length} deterioration predictions (Defects).`);
+    console.log(`Loaded ${degradationItemsData.length} degradation items (Name, Code, Reading).`); 
+    // degradationItemsData の内容を少し表示して確認 (デバッグ用)
+    console.log("Sample degradationItemsData:", degradationItemsData.slice(0, 5)); 
   } catch (error) {
     console.error("Critical error loading prediction data:", error);
     alert("予測変換データの読み込みに失敗しました。アプリケーションが正しく動作しない可能性があります。");
@@ -171,29 +185,44 @@ function generateLocationPredictions(inputText) {
 
 function generateDeteriorationPredictions(inputText) {
   console.log(`[generateDeteriorationPredictions] Input: "${inputText}"`);
-  const searchTerm = inputText.trim().toLowerCase();
+  // ★ 入力もひらがなに変換
+  const searchTermHiragana = katakanaToHiragana(inputText.trim().toLowerCase());
+  if (!searchTermHiragana) return [];
+
+  console.log("[generateDeteriorationPredictions] Searching in degradationItemsData:", degradationItemsData.length, "items with term:", searchTermHiragana);
+
   let results = [];
-  if (searchTerm.length === 2) {
-    const partPrefix = searchTerm.charAt(0);
-    const deteriorationPrefix = searchTerm.charAt(1);
-    console.log(`[generateDeteriorationPredictions] Searching part prefix: '${partPrefix}', det prefix: '${deteriorationPrefix}'`);
-    const matchingParts = partPredictions.filter(p => p.reading && p.reading.toLowerCase().startsWith(partPrefix));
-    const matchingDeteriorations = deteriorationPredictions.filter(d => d.reading && d.reading.toLowerCase().startsWith(deteriorationPrefix));
-    console.log(`[generateDeteriorationPredictions] Found ${matchingParts.length} parts and ${matchingDeteriorations.length} deteriorations.`);
-    matchingParts.forEach(part => {
-      matchingDeteriorations.forEach(det => { results.push(`${part.value} ${det.value}`); });
-    });
-  } else if (searchTerm.length === 1) {
-     const partPrefix = searchTerm.charAt(0);
-     console.log(`[generateDeteriorationPredictions] Searching part prefix only: '${partPrefix}'`);
-      const matchingPartsOnly = partPredictions.filter(p => p.reading && p.reading.toLowerCase().startsWith(partPrefix)).map(p => p.value); 
-      console.log(`[generateDeteriorationPredictions] Found ${matchingPartsOnly.length} parts only.`);
-      results = matchingPartsOnly;
-  } else {
-      console.log("[generateDeteriorationPredictions] Input length not 1 or 2, skipping combo search.");
+
+  // 1. 読み仮名による前方一致検索 (ひらがなで比較)
+  const readingMatches = degradationItemsData
+    .filter(item => {
+        // ★ CSV側の読み仮名もひらがなに変換して比較
+        const readingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
+        return readingHiragana.startsWith(searchTermHiragana);
+    })
+    .map(item => item.name);
+
+  console.log(`[generateDeteriorationPredictions] Reading matches found: ${readingMatches.length}`); 
+  if (readingMatches.length > 0) console.log("[generateDeteriorationPredictions] Reading matches sample:", readingMatches.slice(0, 5));
+  results = results.concat(readingMatches);
+
+  // 2. 2文字コードによる完全一致検索 (入力がちょうど2文字の場合)
+  // ★ コード検索はそのまま (英数字想定)
+  const searchTermCode = inputText.trim().toLowerCase(); // コード検索用は元の入力を使う
+  if (searchTermCode.length === 2) { 
+    const codeMatches = degradationItemsData
+      .filter(item => {
+          const codeLower = item.code?.toLowerCase();
+          return codeLower && codeLower === searchTermCode;
+        })
+      .map(item => item.name); 
+      
+    console.log(`[generateDeteriorationPredictions] Code matches found for '${searchTermCode}': ${codeMatches.length}`); 
+    if (codeMatches.length > 0) console.log("[generateDeteriorationPredictions] Code matches sample:", codeMatches.slice(0, 5));
+    results = results.concat(codeMatches);
   }
-  console.log("[generateDeteriorationPredictions] partPredictions sample:", partPredictions.slice(0, 3)); 
-  console.log("[generateDeteriorationPredictions] deteriorationPredictions sample:", deteriorationPredictions.slice(0, 3));
+
+  // 重複を除去して最大10件返す
   const uniqueResults = [...new Set(results)];
   console.log(`[generateDeteriorationPredictions] Total unique results before slice: ${uniqueResults.length}`);
   return uniqueResults.slice(0, 10);
@@ -206,8 +235,15 @@ function showPredictions(inputElement, predictionListElement, predictions) {
     predictions.forEach(prediction => {
       const li = document.createElement('li');
       li.textContent = prediction;
-      li.classList.add('prediction-item');
+      li.classList.add(
+        'px-3', 'py-2',
+        'cursor-pointer',
+        'hover:bg-blue-100',
+        'list-none'
+      ); 
+      console.log(`[showPredictions] Creating li element:`, li);
       li.addEventListener('mousedown', () => {
+        console.log(`[showPredictions] Prediction clicked: "${prediction}"`); 
         inputElement.value = prediction;
         predictionListElement.classList.add('hidden');
         predictionListElement.innerHTML = ''; 
@@ -217,6 +253,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
     console.log(`[showPredictions] Showing prediction list for: ${inputElement.id}`);
     predictionListElement.classList.remove('hidden');
   } else {
+    console.log(`[showPredictions] Hiding prediction list (no predictions) for: ${inputElement.id}`); 
     predictionListElement.classList.add('hidden');
   }
 }
@@ -232,7 +269,9 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     showPredictions(inputElement, predictionListElement, predictions);
   });
   inputElement.addEventListener('blur', () => {
-    setTimeout(() => hidePredictions(predictionListElement), 150);
+    // ★ blur で隠す処理を元に戻す (300ms待機)
+    setTimeout(() => hidePredictions(predictionListElement), 300);
+    // console.log("[Debug] Blur event triggered, hidePredictions timeout re-enabled (300ms)."); // デバッグ用ログは不要になったので削除
   });
   inputElement.addEventListener('focus', () => {
     const inputText = inputElement.value;
@@ -777,9 +816,9 @@ async function initializeApp() {
     const currentYearSpan = document.getElementById('currentYear');
     const continuousAddBtn = document.getElementById('continuousAddBtn');
     const locationPredictionsList = document.getElementById('locationPredictions');
-    const deteriorationPredictionsList = document.getElementById('deteriorationPredictions');
+    const suggestionsContainer = document.getElementById('suggestions'); // 新しい候補表示用コンテナのID (HTML側と合わせる)
     const editLocationPredictionsList = document.getElementById('editLocationPredictions');
-    const editDeteriorationPredictionsList = document.getElementById('editDeteriorationPredictions');
+    const editSuggestionsContainer = document.getElementById('editSuggestions'); // 編集モーダル用のID (HTML側と合わせる)
 
     // --- 2. Initial UI Setup ---
     currentYearSpan.textContent = new Date().getFullYear();
@@ -826,16 +865,16 @@ async function initializeApp() {
     // Tabs
     infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
     detailTabBtn.addEventListener('click', () => { /* ... validation ... */ switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); });
-    // Predictions
+    // Predictions - ★ リスト要素のIDを修正
     if (locationInput && locationPredictionsList) setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions);
-    if (deteriorationNameInput && deteriorationPredictionsList) setupPredictionListeners(deteriorationNameInput, deteriorationPredictionsList, generateDeteriorationPredictions);
+    if (deteriorationNameInput && suggestionsContainer) setupPredictionListeners(deteriorationNameInput, suggestionsContainer, generateDeteriorationPredictions); // ★ 修正
     if (editLocationInput && editLocationPredictionsList) setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions);
-    if (editDeteriorationNameInput && editDeteriorationPredictionsList) setupPredictionListeners(editDeteriorationNameInput, editDeteriorationPredictionsList, generateDeteriorationPredictions);
+    if (editDeteriorationNameInput && editSuggestionsContainer) setupPredictionListeners(editDeteriorationNameInput, editSuggestionsContainer, generateDeteriorationPredictions); // ★ 修正
     // Basic Info
     setupBasicInfoListeners(surveyDateInput, siteNameInput);
-    // Project/Building Management (Detail Tab Selects)
+    // Project/Building Management
     setupBuildingManagementListeners(projectSelectElement, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
-    // Add Project/Building (Basic Info Button)
+    // Add Project/Building
     if (addBuildingBtn) { addBuildingBtn.addEventListener('click', () => handleAddProjectAndBuilding(surveyDateInput, siteNameInput, buildingNameInput, projectSelectElement, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab)); } else { console.error("Add button not found"); }
     // Forms & Buttons
     if (deteriorationForm) deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement));
