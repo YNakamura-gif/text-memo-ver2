@@ -480,12 +480,12 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
         tr.innerHTML = `
             <td class="py-2 px-3 text-center">${escapeHtml(record.number)}</td>
             <td class="py-2 px-3">
-                <div class="w-full max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.location)}">
+                <div class="w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.location)}">
                     ${escapeHtml(record.location)}
                 </div>
             </td>
             <td class="py-2 px-3">
-                <div class="w-full max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.name)}">
+                <div class="w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.name)}">
                     ${escapeHtml(record.name)}
                 </div>
             </td>
