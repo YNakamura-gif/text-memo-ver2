@@ -370,6 +370,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
 
       li.addEventListener('touchend', (e) => {
         e.preventDefault(); // Touch イベントでは特に重要
+        console.log(`[TouchEnd Prediction] Touched: "${prediction}" for input: ${inputElement.id}`);
         inputElement.value = prediction;
 
         // ★ Cancel the blur timeout if it exists
@@ -378,8 +379,11 @@ function showPredictions(inputElement, predictionListElement, predictions) {
             clearTimeout(blurTimeoutId);
             blurHideTimeouts.delete(predictionListElement);
             console.log("[TouchEnd Prediction] Cleared blur timeout for list.");
+        } else {
+             console.log("[TouchEnd Prediction] No blur timeout found to clear.");
         }
 
+        console.log(`[TouchEnd Prediction] Hiding predictions for ${predictionListElement.id}`);
         hidePredictions(predictionListElement);
 
         let nextFocusElement = null;
@@ -396,10 +400,13 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         if (nextFocusElement) {
           // ★ Change timeout delay to 0 (Keep as 0)
           setTimeout(() => {
-            console.log("[TouchEnd Prediction] Focusing and clicking next element:", nextFocusElement.id);
+            console.log(`[TouchEnd Prediction Timeout] Attempting focus/click on: ${nextFocusElement.id}`);
             nextFocusElement.focus();
             nextFocusElement.click(); // ★ Add click() call
+            console.log(`[TouchEnd Prediction Timeout] After focus/click, active element is: ${document.activeElement?.id}`); // Log active element
           }, 0); // Set delay to 0
+        } else {
+            console.log("[TouchEnd Prediction] No next element to focus.");
         }
       });
       predictionListElement.appendChild(li);
@@ -430,9 +437,11 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     }
   });
 
-  inputElement.addEventListener('blur', () => {
+  inputElement.addEventListener('blur', (e) => {
+    console.log(`[Blur Event] Element: ${e.target.id}, Related Target: ${e.relatedTarget?.id}`);
     // ★ Store the timeout ID using the prediction list element as the key
     const timeoutId = setTimeout(() => {
+        console.log(`[Blur Timeout] Hiding predictions for ${predictionListElement.id}`);
         hidePredictions(predictionListElement);
         blurHideTimeouts.delete(predictionListElement); // Remove ID after execution
     }, 200);
