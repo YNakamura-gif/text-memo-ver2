@@ -356,43 +356,41 @@ function generateDeteriorationPredictions(inputText) {
 }
 
 function showPredictions(inputElement, predictionListElement, predictions) {
-  console.log(`[showPredictions] Received ${predictions.length} predictions for input: ${inputElement.id}`);
-  
-  // 元の候補リスト生成処理に戻す
-  predictionListElement.innerHTML = '';
+  predictionListElement.innerHTML = ''; // Clear previous predictions
+
   if (predictions.length > 0) {
-    predictions.forEach((prediction, index) => { // ★ indexも取得
-      console.log(`[Debug Loop ${index}] Prediction: "${prediction}"`); // ★ ループ内のログ
+    predictions.forEach(prediction => {
       const li = document.createElement('li');
       li.textContent = prediction;
-      li.classList.add(
-        'px-3', 'py-2', 
-        'cursor-pointer', 
-        'hover:bg-blue-100',
-        'list-none' 
-      ); 
-      console.log(`[Debug Loop ${index}] Creating li element:`, li); // ★ 生成したliをログ
-      
-      // イベントリスナーを追加
-      li.addEventListener('mousedown', () => {
-        console.log(`[showPredictions] Prediction clicked: "${prediction}"`); 
-        inputElement.value = prediction;
-        predictionListElement.classList.add('hidden');
-        predictionListElement.innerHTML = ''; 
-      });
+      li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm'); // paddingをpy-1に
 
-      try {
-        predictionListElement.appendChild(li); // ここで追加
-        console.log(`[Debug Loop ${index}] Appended li successfully.`); // ★ 追加成功ログ
-      } catch (e) {
-        console.error(`[Debug Loop ${index}] Error appending li:`, e, li); // ★ 追加失敗ログ
-      }
+      li.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        inputElement.value = prediction;
+        hidePredictions(predictionListElement);
+
+        // ★★★ フォーカス移動処理を追加 ★★★
+        let nextFocusElement = null;
+        if (inputElement.id === 'locationInput') {
+          nextFocusElement = document.getElementById('deteriorationNameInput');
+        } else if (inputElement.id === 'deteriorationNameInput') {
+          nextFocusElement = document.getElementById('photoNumberInput');
+        } else if (inputElement.id === 'editLocationInput') {
+          nextFocusElement = document.getElementById('editDeteriorationNameInput');
+        } else if (inputElement.id === 'editDeteriorationNameInput') {
+          nextFocusElement = document.getElementById('editPhotoNumberInput');
+        }
+
+        if (nextFocusElement) {
+          nextFocusElement.focus();
+        }
+        // ★★★ ここまで ★★★
+      });
+      predictionListElement.appendChild(li);
     });
-    console.log(`[showPredictions] Showing prediction list for: ${inputElement.id}`);
     predictionListElement.classList.remove('hidden');
   } else {
-    console.log(`[showPredictions] Hiding prediction list (no predictions) for: ${inputElement.id}`); 
-    predictionListElement.classList.add('hidden');
+    hidePredictions(predictionListElement);
   }
 }
 
@@ -400,27 +398,50 @@ function hidePredictions(predictionListElement) {
   predictionListElement.classList.add('hidden');
 }
 
-function setupPredictionListeners(inputElement, predictionListElement, generatorFn) {
+function setupPredictionListeners(inputElement, predictionListElement, generatorFn, nextElementId) {
+  if (!inputElement || !predictionListElement) {
+      console.warn("setupPredictionListeners: Input or List element not found.");
+      return;
+  }
+
   inputElement.addEventListener('input', () => {
     const inputText = inputElement.value;
-    const predictions = generatorFn(inputText);
-    showPredictions(inputElement, predictionListElement, predictions);
-  });
-  
-  // ★★★ blurイベントリスナーを元に戻す ★★★
-  inputElement.addEventListener('blur', () => {
-    // ★ blur で隠す処理 (300ms待機)
-    setTimeout(() => hidePredictions(predictionListElement), 300);
-  });
-  // ★★★ ここまで ★★★
-  
-  inputElement.addEventListener('focus', () => {
-    const inputText = inputElement.value;
-    if(inputText.trim()) { 
-      const predictions = generatorFn(inputText);
-      showPredictions(inputElement, predictionListElement, predictions);
+    if (inputText.trim()) {
+        const predictions = generatorFn(inputText);
+        showPredictions(inputElement, predictionListElement, predictions);
+    } else {
+        hidePredictions(predictionListElement);
     }
   });
+
+  inputElement.addEventListener('blur', () => {
+    setTimeout(() => hidePredictions(predictionListElement), 200);
+  });
+
+  inputElement.addEventListener('focus', () => {
+    const inputText = inputElement.value;
+    if (inputText.trim()) {
+      const predictions = generatorFn(inputText);
+      if (predictions.length > 0) {
+          showPredictions(inputElement, predictionListElement, predictions);
+      }
+    }
+  });
+
+  // ★★★ Enterキーでのフォーカス移動リスナーを追加 ★★★
+  if (nextElementId) { // 次の要素のIDが指定されている場合のみ
+    inputElement.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault(); // デフォルトのEnter動作（フォーム送信など）を抑制
+        hidePredictions(predictionListElement); // 予測リストを隠す
+        const nextElement = document.getElementById(nextElementId);
+        if (nextElement) {
+          nextElement.focus(); // 次の要素にフォーカス
+        }
+      }
+    });
+  }
+  // ★★★ ここまで ★★★
 }
 
 // ======================================================================
@@ -1026,12 +1047,18 @@ async function initializeApp() {
     console.log("Setting up event listeners...");
     // Tabs
     infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
-    detailTabBtn.addEventListener('click', () => { /* ... validation ... */ switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); });
+    detailTabBtn.addEventListener('click', () => {
+        if (!currentProjectId || !currentBuildingId) {
+            alert("詳細タブを表示するには、まずプロジェクトと建物を選択または追加してください。");
+            return;
+        }
+        switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
+    });
     // Predictions - ★ リスト要素のIDを修正
-    if (locationInput && locationPredictionsList) setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions);
-    if (deteriorationNameInput && suggestionsContainer) setupPredictionListeners(deteriorationNameInput, suggestionsContainer, generateDeteriorationPredictions); // ★ 修正
-    if (editLocationInput && editLocationPredictionsList) setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions);
-    if (editDeteriorationNameInput && editSuggestionsContainer) setupPredictionListeners(editDeteriorationNameInput, editSuggestionsContainer, generateDeteriorationPredictions); // ★ 修正
+    if (locationInput && locationPredictionsList) setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions, 'deteriorationNameInput');
+    if (deteriorationNameInput && suggestionsContainer) setupPredictionListeners(deteriorationNameInput, suggestionsContainer, generateDeteriorationPredictions, 'photoNumberInput'); // ★ 修正
+    if (editLocationInput && editLocationPredictionsList) setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions, 'editDeteriorationNameInput');
+    if (editDeteriorationNameInput && editSuggestionsContainer) setupPredictionListeners(editDeteriorationNameInput, editSuggestionsContainer, generateDeteriorationPredictions, 'editPhotoNumberInput'); // ★ 修正
     // Basic Info
     setupBasicInfoListeners(surveyDateInput, siteNameInput);
     // Project/Building Management
