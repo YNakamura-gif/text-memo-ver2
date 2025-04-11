@@ -382,7 +382,9 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         }
 
         if (nextFocusElement) {
-          nextFocusElement.focus();
+          setTimeout(() => {
+            nextFocusElement.focus();
+          }, 100);
         }
         // ★★★ ここまで ★★★
       });
