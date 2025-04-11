@@ -85,6 +85,14 @@ function katakanaToHiragana(str) {
   });
 }
 
+// ★ NEW: Full-width numbers to Half-width converter function
+function zenkakuToHankaku(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[０-９]/g, function(s) {
+    return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+  });
+}
+
 // ======================================================================
 // 5. Data Loading/Parsing (CSV, Predictions)
 // ======================================================================
@@ -94,9 +102,9 @@ function parseCsv(csvText, expectedColumns) {
   const lines = csvText.trim().split(/\r?\n/);
   if (lines.length <= 1) {
     console.warn("CSV file has no data or only a header.");
-    return []; 
+    return [];
   }
-  const header = lines.shift().split(','); 
+  const header = lines.shift().split(',');
   console.log("[parseCsv] Header:", header);
   if (header.length < expectedColumns) {
       console.warn(`CSV header has fewer columns (${header.length}) than expected (${expectedColumns}).`);
@@ -105,17 +113,21 @@ function parseCsv(csvText, expectedColumns) {
   return lines.map((line, index) => { // ★ 追加：行番号もログに出す
     const values = line.split(',');
     console.log(`[parseCsv] Line ${index + 1} values:`, values); // ★ 追加：パースした各行の配列を表示
-    if (expectedColumns === 2) { 
-      const value = values[0]?.trim();
-      const reading = values[1]?.trim();
-      return value ? { value: value, reading: reading || '' } : null;
-    } else if (expectedColumns === 3) { 
+    if (expectedColumns === 3 && header[0] === '階数') { // ヘッダーで場所CSVかを判断
+      const floor = values[0]?.trim() || ''; // 階数がない場合は空文字に
+      const value = values[1]?.trim(); // 部屋名
+      const reading = values[2]?.trim(); // 読み
+      // 部屋名があれば有効なデータとする
+      return value ? { floor: floor, value: value, reading: reading || '' } : null;
+    }
+    // ★ 劣化項目CSV (3列想定) の処理
+    else if (expectedColumns === 3 && header[0] === '劣化名') { // ★ header[0]が劣化名の場合を追加
       const name = values[0]?.trim();
       const code = values[1]?.trim();
       const reading = values[2]?.trim();
       return name ? { name: name, code: code || '', reading: reading || '' } : null;
     } else {
-      console.warn(`Unsupported expectedColumns: ${expectedColumns}`);
+      console.warn(`Unsupported expectedColumns or unknown CSV format: ${expectedColumns}, Header: ${header[0]}`);
       return null;
     }
   }).filter(item => item !== null);
@@ -149,12 +161,12 @@ async function loadPredictionData() {
   try {
     // Promise.all を使って並列読み込み
     [locationPredictions, degradationItemsData] = await Promise.all([
-      fetchAndParseCsv('./部屋名_読み付き.csv', 2),       // 場所データは2列期待
+      fetchAndParseCsv('./部屋名_読み付き.csv', 3),       // ★ 変更: 場所データは3列期待
       fetchAndParseCsv('./劣化項目_読み付き.csv', 3)     // 劣化項目データは3列期待
     ]);
     // 古い部位・劣化名のログを削除
-    console.log(`Loaded ${locationPredictions.length} location predictions (Rooms).`);
-    console.log(`Loaded ${degradationItemsData.length} degradation items (Name, Code, Reading).`); 
+    console.log(`Loaded ${locationPredictions.length} location predictions (Rooms with Floor).`);
+    console.log(`Loaded ${degradationItemsData.length} degradation items (Name, Code, Reading).`);
     // degradationItemsData の内容を少し表示して確認 (デバッグ用)
     console.log("Sample degradationItemsData:", degradationItemsData.slice(0, 5)); 
   } catch (error) {
@@ -166,52 +178,98 @@ async function loadPredictionData() {
 // ======================================================================
 // 6. Prediction Logic Functions
 // ======================================================================
+
+// ★ COMBINED RESULTS generateLocationPredictions function
 function generateLocationPredictions(inputText) {
   console.log(`[generateLocationPredictions] Input: "${inputText}"`);
 
-  let floorPrefix = '';
-  let searchTermRaw = inputText.trim(); 
-  console.log(`[Debug] Initial searchTermRaw: "${searchTermRaw}"`); // ★ 追加
+  // ★ 1. Convert full-width numbers to half-width in the input
+  const inputTextHankaku = zenkakuToHankaku(inputText.trim());
+  console.log(`[generateLocationPredictions] Input after Hankaku conversion: "${inputTextHankaku}"`);
 
-  // 正規表現: 先頭が数字1桁以上 (^\d+) で、その後ろに文字が続く (.+)
-  const floorMatch = searchTermRaw.match(/^(\d+)(.+)$/);
-  console.log("[Debug] floorMatch result:", floorMatch); // ★ 追加: 正規表現のマッチ結果
+  let floorSearchTerm = null;
+  let roomSearchTermRaw = inputTextHankaku;
+  let roomSearchTermHiragana = '';
+
+  // Regex to detect floor prefix (e.g., 1, B1, PH)
+  const floorMatch = roomSearchTermRaw.match(/^([a-zA-Z0-9]{1,3})(.*)$/);
 
   if (floorMatch && floorMatch[1] && floorMatch[2]) {
-    floorPrefix = floorMatch[1] + "F "; 
-    searchTermRaw = floorMatch[2]; 
-    console.log(`[generateLocationPredictions] Floor detected: '${floorPrefix}', Search term adjusted to: '${searchTermRaw}'`);
+    floorSearchTerm = floorMatch[1].toLowerCase();
+    roomSearchTermRaw = floorMatch[2];
+    console.log(`[generateLocationPredictions] Floor search term: '${floorSearchTerm}', Room search term raw: '${roomSearchTermRaw}'`);
+  } else if (roomSearchTermRaw.match(/^[a-zA-Z0-9]{1,3}$/)) {
+      floorSearchTerm = roomSearchTermRaw.toLowerCase();
+      roomSearchTermRaw = '';
+      console.log(`[generateLocationPredictions] Input is potentially floor only: '${floorSearchTerm}'`);
   } else {
-    console.log("[generateLocationPredictions] No floor prefix detected or input is only numbers.");
-    // ★ 追加: 全角数字の可能性も考慮する (簡易チェック)
-    if (searchTermRaw.match(/^[０-９]+/)) {
-        console.warn("[Debug] Full-width number detected at the beginning. Regex might need adjustment.");
-    }
+    console.log("[generateLocationPredictions] No floor prefix detected in input.");
   }
 
-  const searchTermHiragana = searchTermRaw ? katakanaToHiragana(searchTermRaw.toLowerCase()) : '';
-  console.log(`[Debug] searchTermHiragana: "${searchTermHiragana}"`); // ★ 追加
-  
-  if (!searchTermHiragana) {
-      console.log("[generateLocationPredictions] No valid search term after processing floor prefix.");
+  roomSearchTermHiragana = katakanaToHiragana(roomSearchTermRaw.toLowerCase());
+
+  if (!roomSearchTermHiragana && !floorSearchTerm) {
+      console.log("[generateLocationPredictions] No valid search term.");
       return [];
   }
 
-  console.log(`[generateLocationPredictions] Searching locationPredictions (${locationPredictions.length} items) with term: '${searchTermHiragana}'`);
-
-  const filtered = locationPredictions
-    .filter(item => {
-      const readingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
-      return readingHiragana.startsWith(searchTermHiragana);
-    })
-    .map(item => {
-      return floorPrefix + item.value;
+  // ★ 2. Find matching floors from CSV
+  let matchingFloors = [];
+  if (floorSearchTerm !== null) {
+    const floorSet = new Set(); // Use Set to avoid duplicates
+    locationPredictions.forEach(item => {
+      const itemFloorLower = item.floor?.toLowerCase() || '';
+      if (itemFloorLower.startsWith(floorSearchTerm)) {
+        floorSet.add(item.floor); // Add the original floor string (not lowercase)
+      }
     });
+    matchingFloors = Array.from(floorSet);
+    console.log(`[generateLocationPredictions] Found ${matchingFloors.length} matching floors in CSV:`, matchingFloors);
+  } else {
+    matchingFloors = [''];  // If no floor search term, use empty string
+    console.log(`[generateLocationPredictions] No floor search term, using empty floor.`);
+  }
 
-  console.log(`[generateLocationPredictions] Filtered count: ${filtered.length}`);
-  if (filtered.length > 0) console.log("[generateLocationPredictions] Filtered results sample:", filtered.slice(0, 5));
+  // ★ 3. Find matching room names from CSV
+  let matchingRoomNames = [];
+  const roomNameSet = new Set(); // Use Set to avoid duplicates
+  if (roomSearchTermHiragana) {
+    locationPredictions.forEach(item => {
+      const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
+      if (itemReadingHiragana.startsWith(roomSearchTermHiragana)) {
+        roomNameSet.add(item.value); // Add the room name
+      }
+    });
+    matchingRoomNames = Array.from(roomNameSet);
+    console.log(`[generateLocationPredictions] Found ${matchingRoomNames.length} matching room names in CSV:`, matchingRoomNames);
+  } else {
+    // If no room search term but there's a floor term, show all rooms
+    // This could potentially create too many results, so let's limit it
+    if (floorSearchTerm !== null) {
+      locationPredictions.forEach(item => {
+        if (roomNameSet.size < 20) { // Arbitrary limit to avoid too many combinations
+          roomNameSet.add(item.value);
+        }
+      });
+      matchingRoomNames = Array.from(roomNameSet);
+      console.log(`[generateLocationPredictions] No room search term, using up to 20 room names:`, matchingRoomNames.length);
+    }
+  }
 
-  return filtered.slice(0, 10); 
+  // ★ 4. Generate all combinations
+  let combinations = [];
+  for (const floor of matchingFloors) {
+    for (const roomName of matchingRoomNames) {
+      const candidate = floor ? floor + " " + roomName : roomName;
+      combinations.push(candidate);
+    }
+  }
+
+  console.log(`[generateLocationPredictions] Generated ${combinations.length} combinations`);
+  if (combinations.length > 0) console.log("[generateLocationPredictions] Combinations sample:", combinations.slice(0, 5));
+
+  // Return up to 10 combinations
+  return combinations.slice(0, 10);
 }
 
 function generateDeteriorationPredictions(inputText) {
