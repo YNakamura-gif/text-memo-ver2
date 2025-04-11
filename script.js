@@ -369,7 +369,6 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         inputElement.value = prediction;
         hidePredictions(predictionListElement);
 
-        // ★★★ フォーカス移動処理を追加 ★★★
         let nextFocusElement = null;
         if (inputElement.id === 'locationInput') {
           nextFocusElement = document.getElementById('deteriorationNameInput');
@@ -386,7 +385,6 @@ function showPredictions(inputElement, predictionListElement, predictions) {
             nextFocusElement.focus();
           }, 100);
         }
-        // ★★★ ここまで ★★★
       });
       predictionListElement.appendChild(li);
     });
