@@ -364,7 +364,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
       li.textContent = prediction;
       li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm'); // paddingをpy-1に
 
-      li.addEventListener('mousedown', (e) => {
+      li.addEventListener('click', (e) => {
         e.preventDefault();
         inputElement.value = prediction;
         hidePredictions(predictionListElement);
