@@ -479,8 +479,16 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
         tr.classList.add('border-b'); // Add bottom border to rows
         tr.innerHTML = `
             <td class="py-2 px-3 text-center">${escapeHtml(record.number)}</td>
-            <td class="py-2 px-3 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.location)}">${escapeHtml(record.location)}</td>
-            <td class="py-2 px-3 max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.name)}">${escapeHtml(record.name)}</td>
+            <td class="py-2 px-3">
+                <div class="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.location)}">
+                    ${escapeHtml(record.location)}
+                </div>
+            </td>
+            <td class="py-2 px-3">
+                <div class="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap" title="${escapeHtml(record.name)}">
+                    ${escapeHtml(record.name)}
+                </div>
+            </td>
             <td class="py-2 px-3 text-center">${escapeHtml(record.photoNumber)}</td>
             <td class="py-2 px-3 text-center whitespace-nowrap">
                 <button class="edit-btn bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded text-sm mr-1">編集</button>
