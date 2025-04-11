@@ -365,10 +365,11 @@ function showPredictions(inputElement, predictionListElement, predictions) {
     predictions.forEach(prediction => {
       const li = document.createElement('li');
       li.textContent = prediction;
+      li.setAttribute('tabindex', '-1');
       li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm'); // paddingをpy-1に
 
-      li.addEventListener('click', (e) => {
-        e.preventDefault();
+      li.addEventListener('touchstart', (e) => {
+        e.preventDefault(); // Touch イベントでは特に重要
         inputElement.value = prediction;
 
         // ★ Cancel the blur timeout if it exists
@@ -376,7 +377,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         if (blurTimeoutId) {
             clearTimeout(blurTimeoutId);
             blurHideTimeouts.delete(predictionListElement);
-            console.log("[Click Prediction] Cleared blur timeout for list.");
+            console.log("[Touch Prediction] Cleared blur timeout for list.");
         }
 
         hidePredictions(predictionListElement);
@@ -393,9 +394,9 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         }
 
         if (nextFocusElement) {
-          // ★ Change timeout delay to 0
+          // ★ Change timeout delay to 0 (Keep as 0)
           setTimeout(() => {
-            console.log("[Click Prediction] Focusing next element:", nextFocusElement.id);
+            console.log("[Touch Prediction] Focusing next element:", nextFocusElement.id);
             nextFocusElement.focus();
           }, 0); // Set delay to 0
         }
