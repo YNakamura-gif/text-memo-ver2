@@ -18,6 +18,9 @@ const database = firebase.database();
 // ======================================================================
 // 2. Global State & Prediction Data Storage
 // ======================================================================
+// ★ Add a map to store blur timeout IDs
+const blurHideTimeouts = new Map();
+
 let locationPredictions = [];
 let degradationItemsData = []; // 新しい劣化項目データ用
 
@@ -367,6 +370,15 @@ function showPredictions(inputElement, predictionListElement, predictions) {
       li.addEventListener('click', (e) => {
         e.preventDefault();
         inputElement.value = prediction;
+
+        // ★ Cancel the blur timeout if it exists
+        const blurTimeoutId = blurHideTimeouts.get(predictionListElement);
+        if (blurTimeoutId) {
+            clearTimeout(blurTimeoutId);
+            blurHideTimeouts.delete(predictionListElement);
+            console.log("[Click Prediction] Cleared blur timeout for list.");
+        }
+
         hidePredictions(predictionListElement);
 
         let nextFocusElement = null;
@@ -381,9 +393,11 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         }
 
         if (nextFocusElement) {
+          // ★ Change timeout delay to 0
           setTimeout(() => {
+            console.log("[Click Prediction] Focusing next element:", nextFocusElement.id);
             nextFocusElement.focus();
-          }, 100);
+          }, 0); // Set delay to 0
         }
       });
       predictionListElement.appendChild(li);
@@ -415,7 +429,12 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
   });
 
   inputElement.addEventListener('blur', () => {
-    setTimeout(() => hidePredictions(predictionListElement), 200);
+    // ★ Store the timeout ID using the prediction list element as the key
+    const timeoutId = setTimeout(() => {
+        hidePredictions(predictionListElement);
+        blurHideTimeouts.delete(predictionListElement); // Remove ID after execution
+    }, 200);
+    blurHideTimeouts.set(predictionListElement, timeoutId);
   });
 
   inputElement.addEventListener('focus', () => {
