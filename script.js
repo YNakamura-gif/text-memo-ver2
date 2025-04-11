@@ -396,8 +396,9 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         if (nextFocusElement) {
           // ★ Change timeout delay to 0 (Keep as 0)
           setTimeout(() => {
-            console.log("[TouchEnd Prediction] Focusing next element:", nextFocusElement.id);
+            console.log("[TouchEnd Prediction] Focusing and clicking next element:", nextFocusElement.id);
             nextFocusElement.focus();
+            nextFocusElement.click(); // ★ Add click() call
           }, 0); // Set delay to 0
         }
       });
