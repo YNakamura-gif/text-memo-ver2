@@ -95,7 +95,7 @@ textarea {
 /* テーブルセルの省略表示用スタイル */
 .cell-truncate {
   display: block; /* block要素として扱う */
-  max-width: 50px;   /* さらに幅を狭く変更 */
+  max-width: 70px;   /* 幅を再調整 */
   overflow: hidden; /* はみ出しを隠す */
   text-overflow: ellipsis; /* 省略記号 (...) を表示 */
   white-space: nowrap; /* 折り返し禁止 */
