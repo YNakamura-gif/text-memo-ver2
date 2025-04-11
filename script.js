@@ -1056,10 +1056,6 @@ async function initializeApp() {
     // Tabs
     infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
     detailTabBtn.addEventListener('click', () => {
-        if (!currentProjectId || !currentBuildingId) {
-            alert("詳細タブを表示するには、まずプロジェクトと建物を選択または追加してください。");
-            return;
-        }
         switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
     });
     // Predictions - ★ リスト要素のIDを修正
