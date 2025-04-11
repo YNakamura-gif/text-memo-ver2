@@ -478,19 +478,19 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
         const tr = document.createElement('tr');
         tr.classList.add('border-b');
         tr.innerHTML = `
-            <td class="py-2 px-2 text-center text-sm">${escapeHtml(record.number)}</td>
-            <td class="py-2 px-2 text-sm">
+            <td class="py-1 px-2 text-center text-sm">${escapeHtml(record.number)}</td>
+            <td class="py-1 px-2 text-sm">
                 <div class="cell-truncate" title="${escapeHtml(record.location)}">
                     ${escapeHtml(record.location)}
                 </div>
             </td>
-            <td class="py-2 px-2 text-sm">
+            <td class="py-1 px-2 text-sm">
                 <div class="cell-truncate" title="${escapeHtml(record.name)}">
                     ${escapeHtml(record.name)}
                 </div>
             </td>
-            <td class="py-2 px-2 text-center text-sm">${escapeHtml(record.photoNumber)}</td>
-            <td class="py-2 px-1 text-center whitespace-nowrap">
+            <td class="py-1 px-2 text-center text-sm">${escapeHtml(record.photoNumber)}</td>
+            <td class="py-1 px-1 text-center whitespace-nowrap">
                 <button class="edit-btn bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded text-sm">編集</button>
                 <button class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded text-sm">削除</button>
             </td>
