@@ -90,4 +90,13 @@ textarea {
 }
 
 /* 既存の prediction-list スタイルと区別/調整が必要な場合 */
-/* .prediction-list { ... } */ 
+/* .prediction-list { ... } */
+
+/* テーブルセルの省略表示用スタイル */
+.cell-truncate {
+  display: block; /* block要素として扱う */
+  width: 120px;   /* 固定幅 */
+  overflow: hidden; /* はみ出しを隠す */
+  text-overflow: ellipsis; /* 省略記号 (...) を表示 */
+  white-space: nowrap; /* 折り返し禁止 */
+} 
