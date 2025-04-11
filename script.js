@@ -181,11 +181,11 @@ async function loadPredictionData() {
 
 // ★ COMBINED RESULTS generateLocationPredictions function
 function generateLocationPredictions(inputText) {
-  console.log(`[generateLocationPredictions] Input: "${inputText}"`);
+  console.log(`[generateLocationPredictions] Input: \"${inputText}\"`);
 
   // ★ 1. Convert full-width numbers to half-width in the input
   const inputTextHankaku = zenkakuToHankaku(inputText.trim());
-  console.log(`[generateLocationPredictions] Input after Hankaku conversion: "${inputTextHankaku}"`);
+  console.log(`[generateLocationPredictions] Input after Hankaku conversion: \"${inputTextHankaku}\"`);
 
   let floorSearchTerm = null;
   let roomSearchTermRaw = inputTextHankaku;
@@ -215,8 +215,8 @@ function generateLocationPredictions(inputText) {
 
   // ★ 2. Find matching floors from CSV
   let matchingFloors = [];
+  const floorSet = new Set(); // Use Set to avoid duplicates
   if (floorSearchTerm !== null) {
-    const floorSet = new Set(); // Use Set to avoid duplicates
     locationPredictions.forEach(item => {
       const itemFloorLower = item.floor?.toLowerCase() || '';
       if (itemFloorLower.startsWith(floorSearchTerm)) {
@@ -226,50 +226,88 @@ function generateLocationPredictions(inputText) {
     matchingFloors = Array.from(floorSet);
     console.log(`[generateLocationPredictions] Found ${matchingFloors.length} matching floors in CSV:`, matchingFloors);
   } else {
-    matchingFloors = [''];  // If no floor search term, use empty string
-    console.log(`[generateLocationPredictions] No floor search term, using empty floor.`);
+    // If no floor search term, we only search based on room name later.
+    // We don't add [''] here anymore, as it complicates combination logic.
+    console.log(`[generateLocationPredictions] No floor search term, will search by room name only.`);
   }
 
   // ★ 3. Find matching room names from CSV
   let matchingRoomNames = [];
   const roomNameSet = new Set(); // Use Set to avoid duplicates
+
   if (roomSearchTermHiragana) {
+    // If a room name part is entered, find rooms matching the reading
     locationPredictions.forEach(item => {
       const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
       if (itemReadingHiragana.startsWith(roomSearchTermHiragana)) {
-        roomNameSet.add(item.value); // Add the room name
+        if (item.value) roomNameSet.add(item.value); // Add the room name if it exists
       }
     });
     matchingRoomNames = Array.from(roomNameSet);
-    console.log(`[generateLocationPredictions] Found ${matchingRoomNames.length} matching room names in CSV:`, matchingRoomNames);
+    console.log(`[generateLocationPredictions] Found ${matchingRoomNames.length} matching room names based on reading:`, matchingRoomNames);
+
+  } else if (floorSearchTerm !== null) {
+    // <<<<< MODIFIED LOGIC >>>>>
+    // If ONLY floor is entered, get ALL unique room names from the CSV
+    console.log('[generateLocationPredictions] Floor term entered, collecting all unique room names.');
+    locationPredictions.forEach(item => {
+      if (item.value) { // Ensure room name exists
+        roomNameSet.add(item.value);
+      }
+    });
+    matchingRoomNames = Array.from(roomNameSet);
+    console.log(`[generateLocationPredictions] Collected ${matchingRoomNames.length} unique room names from CSV.`);
+    // <<<<< END MODIFIED LOGIC >>>>>
+
   } else {
-    // If no room search term but there's a floor term, show all rooms
-    // This could potentially create too many results, so let's limit it
-    if (floorSearchTerm !== null) {
-      locationPredictions.forEach(item => {
-        if (roomNameSet.size < 20) { // Arbitrary limit to avoid too many combinations
-          roomNameSet.add(item.value);
-        }
-      });
-      matchingRoomNames = Array.from(roomNameSet);
-      console.log(`[generateLocationPredictions] No room search term, using up to 20 room names:`, matchingRoomNames.length);
-    }
+    // No floor or room search term (should not happen due to check at the beginning)
+    console.log('[generateLocationPredictions] No floor or room search term, no room name matches generated.');
   }
 
   // ★ 4. Generate all combinations
   let combinations = [];
-  for (const floor of matchingFloors) {
-    for (const roomName of matchingRoomNames) {
-      const candidate = floor ? floor + " " + roomName : roomName;
-      combinations.push(candidate);
-    }
+
+  // Add matching floors themselves as candidates if no room name was specifically searched
+  if (!roomSearchTermHiragana && floorSearchTerm) {
+    matchingFloors.forEach(floor => {
+        if (floor) { // Ensure floor is not empty
+            combinations.push(floor);
+        }
+    });
   }
 
-  console.log(`[generateLocationPredictions] Generated ${combinations.length} combinations`);
-  if (combinations.length > 0) console.log("[generateLocationPredictions] Combinations sample:", combinations.slice(0, 5));
+  // Generate floor + room name combinations
+  for (const floor of matchingFloors) {
+      if (!floor) continue; // Skip if floor is empty
+      for (const roomName of matchingRoomNames) {
+         if (!roomName) continue; // Skip if room name is empty
+          // Only add combination if floor was part of the search OR room name was part of search
+         if (floorSearchTerm || roomSearchTermHiragana) {
+              combinations.push(`${floor} ${roomName}`);
+         }
+      }
+  }
+
+  // If only a room name was searched (no floor), ensure room names themselves are included
+  if (!floorSearchTerm && roomSearchTermHiragana) {
+       matchingRoomNames.forEach(room => {
+           if (room) combinations.push(room);
+       });
+  }
+
+
+  console.log(`[generateLocationPredictions] Generated ${combinations.length} raw combinations`);
+  if (combinations.length > 0) console.log("[generateLocationPredictions] Raw combinations sample:", combinations.slice(0, 10));
+
+
+  // Remove duplicates and limit
+  const uniqueCombinations = [...new Set(combinations)];
+  console.log(`[generateLocationPredictions] Final unique combinations count: ${uniqueCombinations.length}`);
+  if (uniqueCombinations.length > 0) console.log("[generateLocationPredictions] Final unique combinations sample:", uniqueCombinations.slice(0, 10));
+
 
   // Return up to 10 combinations
-  return combinations.slice(0, 10);
+  return uniqueCombinations.slice(0, 10);
 }
 
 function generateDeteriorationPredictions(inputText) {
