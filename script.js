@@ -648,8 +648,8 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
         deteriorationData[buildingId] = initialData; // Update global cache
         console.log(`[fetchAndRenderDeteriorations] Initial data fetched for ${buildingId}:`, initialData);
         
-        // 2. Render initial data
-        const records = Object.entries(initialData).map(([id, data]) => ({ id, ...data })).sort((a, b) => a.number - b.number); 
+        // 2. Render initial data (Sort descending by number)
+        const records = Object.entries(initialData).map(([id, data]) => ({ id, ...data })).sort((a, b) => b.number - a.number); // <-- Sort descending
         renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
         
         // 3. Update the next ID display based on fetched data
@@ -943,7 +943,8 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
         // Only re-render if this is the currently selected building
         if (buildingId === currentBuildingId) {
             console.log(`[Listener Callback] Data changed for current building ${buildingId}, rendering.`);
-             const records = Object.entries(newData).map(([id, data]) => ({ id, ...data })).sort((a, b) => a.number - b.number); 
+             // Sort descending by number for display
+             const records = Object.entries(newData).map(([id, data]) => ({ id, ...data })).sort((a, b) => b.number - a.number); // <-- Sort descending
             renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
             // Optionally update next ID display based on listener update?
             // updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement); 
