@@ -460,31 +460,44 @@ async function updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement) 
 }
 
 function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
-  console.log(`[renderDeteriorationTable] Rendering ${recordsToRender.length} records.`);
-  deteriorationTableBodyElement.innerHTML = ''; 
-  if (recordsToRender.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="5" class="text-center text-gray-500 py-4">データがありません</td>`;
-    deteriorationTableBodyElement.appendChild(tr);
-  } else {
+    if (!deteriorationTableBodyElement) return;
+    deteriorationTableBodyElement.innerHTML = ''; // Clear existing rows
+
+    if (recordsToRender.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 5; // Span all columns
+        td.textContent = '登録データがありません。';
+        td.classList.add('text-center', 'py-4', 'text-gray-500');
+        tr.appendChild(td);
+        deteriorationTableBodyElement.appendChild(tr);
+        return;
+    }
+
     recordsToRender.forEach(record => {
-      const tr = document.createElement('tr');
-      tr.dataset.recordId = record.id; 
-      tr.innerHTML = `
-        <td class="px-2 py-2 whitespace-nowrap text-sm text-gray-900">${record.number}</td>
-        <td class="px-2 py-2 text-sm text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">${escapeHtml(record.location)}</td>
-        <td class="px-2 py-2 text-sm text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis">${escapeHtml(record.name)}</td>
-        <td class="px-2 py-2 text-sm text-gray-500">${escapeHtml(record.photoNumber)}</td>
-        <td class="px-2 py-2 text-right text-sm font-medium whitespace-nowrap">
-          <button class="text-indigo-600 hover:text-indigo-900 mr-2 edit-btn">編集</button>
-          <button class="text-red-600 hover:text-red-900 delete-btn">削除</button>
-        </td>
-      `;
-      tr.querySelector('.edit-btn').addEventListener('click', () => handleEditClick(currentProjectId, currentBuildingId, record.id, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput));
-      tr.querySelector('.delete-btn').addEventListener('click', () => handleDeleteClick(currentProjectId, currentBuildingId, record.id, record.number));
-      deteriorationTableBodyElement.appendChild(tr);
+        const tr = document.createElement('tr');
+        tr.classList.add('border-b'); // Add bottom border to rows
+        tr.innerHTML = `
+            <td class="py-2 px-3 text-center">${escapeHtml(record.number)}</td>
+            <td class="py-2 px-3 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">${escapeHtml(record.location)}</td>
+            <td class="py-2 px-3 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">${escapeHtml(record.name)}</td>
+            <td class="py-2 px-3 text-center">${escapeHtml(record.photoNumber)}</td>
+            <td class="py-2 px-3 text-center whitespace-nowrap">
+                <button class="edit-btn bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded text-sm mr-1">編集</button>
+                <button class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded text-sm">削除</button>
+            </td>
+        `;
+        // Add event listeners for edit and delete buttons
+        const editBtn = tr.querySelector('.edit-btn');
+        const deleteBtn = tr.querySelector('.delete-btn');
+        if (editBtn) {
+            editBtn.addEventListener('click', () => handleEditClick(currentProjectId, currentBuildingId, record.id, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput));
+        }
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => handleDeleteClick(currentProjectId, currentBuildingId, record.id, record.number));
+        }
+        deteriorationTableBodyElement.appendChild(tr);
     });
-  }
 }
 
 // ======================================================================
