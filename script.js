@@ -110,7 +110,7 @@ function parseCsv(csvText, expectedColumns) {
       console.warn(`CSV header has fewer columns (${header.length}) than expected (${expectedColumns}).`);
   }
 
-  return lines.map((line, index) => { // ★ 追加：行番号もログに出す
+  return lines.map((line, index) => { // ★ 追加：行番号もログ
     const values = line.split(',');
     console.log(`[parseCsv] Line ${index + 1} values:`, values); // ★ 追加：パースした各行の配列を表示
     if (expectedColumns === 3 && header[0] === '階数') { // ヘッダーで場所CSVかを判断
