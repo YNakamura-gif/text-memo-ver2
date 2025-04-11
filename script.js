@@ -368,7 +368,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
       li.setAttribute('tabindex', '-1');
       li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm'); // paddingをpy-1に
 
-      li.addEventListener('touchstart', (e) => {
+      li.addEventListener('touchend', (e) => {
         e.preventDefault(); // Touch イベントでは特に重要
         inputElement.value = prediction;
 
@@ -377,7 +377,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         if (blurTimeoutId) {
             clearTimeout(blurTimeoutId);
             blurHideTimeouts.delete(predictionListElement);
-            console.log("[Touch Prediction] Cleared blur timeout for list.");
+            console.log("[TouchEnd Prediction] Cleared blur timeout for list.");
         }
 
         hidePredictions(predictionListElement);
@@ -396,7 +396,7 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         if (nextFocusElement) {
           // ★ Change timeout delay to 0 (Keep as 0)
           setTimeout(() => {
-            console.log("[Touch Prediction] Focusing next element:", nextFocusElement.id);
+            console.log("[TouchEnd Prediction] Focusing next element:", nextFocusElement.id);
             nextFocusElement.focus();
           }, 0); // Set delay to 0
         }
