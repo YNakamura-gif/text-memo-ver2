@@ -18,9 +18,6 @@ const database = firebase.database();
 // ======================================================================
 // 2. Global State & Prediction Data Storage
 // ======================================================================
-// ★ Add a map to store blur timeout IDs
-const blurHideTimeouts = new Map();
-
 let locationPredictions = [];
 let degradationItemsData = []; // 新しい劣化項目データ用
 
@@ -366,24 +363,14 @@ function showPredictions(inputElement, predictionListElement, predictions) {
       const li = document.createElement('li');
       li.textContent = prediction;
       li.setAttribute('tabindex', '-1');
-      li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm'); // paddingをpy-1に
+      li.classList.add('px-3', 'py-1', 'cursor-pointer', 'hover:bg-blue-100', 'list-none', 'text-sm');
 
+      // Restore touchend event listener
       li.addEventListener('touchend', (e) => {
-        e.preventDefault(); // Touch イベントでは特に重要
-        console.log(`[TouchEnd Prediction] Touched: "${prediction}" for input: ${inputElement.id}`);
+        e.preventDefault();
         inputElement.value = prediction;
 
-        // ★ Cancel the blur timeout if it exists
-        const blurTimeoutId = blurHideTimeouts.get(predictionListElement);
-        if (blurTimeoutId) {
-            clearTimeout(blurTimeoutId);
-            blurHideTimeouts.delete(predictionListElement);
-            console.log("[TouchEnd Prediction] Cleared blur timeout for list.");
-        } else {
-             console.log("[TouchEnd Prediction] No blur timeout found to clear.");
-        }
-
-        console.log(`[TouchEnd Prediction] Hiding predictions for ${predictionListElement.id}`);
+        // ★ Restore simple hidePredictions call
         hidePredictions(predictionListElement);
 
         let nextFocusElement = null;
@@ -398,15 +385,11 @@ function showPredictions(inputElement, predictionListElement, predictions) {
         }
 
         if (nextFocusElement) {
-          // ★ Change timeout delay to 0 (Keep as 0)
+          // ★ Restore focus/click attempt with timeout 0
           setTimeout(() => {
-            console.log(`[TouchEnd Prediction Timeout] Attempting focus/click on: ${nextFocusElement.id}`);
             nextFocusElement.focus();
-            nextFocusElement.click(); // ★ Add click() call
-            console.log(`[TouchEnd Prediction Timeout] After focus/click, active element is: ${document.activeElement?.id}`); // Log active element
-          }, 0); // Set delay to 0
-        } else {
-            console.log("[TouchEnd Prediction] No next element to focus.");
+            nextFocusElement.click();
+          }, 0);
         }
       });
       predictionListElement.appendChild(li);
@@ -437,15 +420,9 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     }
   });
 
-  inputElement.addEventListener('blur', (e) => {
-    console.log(`[Blur Event] Element: ${e.target.id}, Related Target: ${e.relatedTarget?.id}`);
-    // ★ Store the timeout ID using the prediction list element as the key
-    const timeoutId = setTimeout(() => {
-        console.log(`[Blur Timeout] Hiding predictions for ${predictionListElement.id}`);
-        hidePredictions(predictionListElement);
-        blurHideTimeouts.delete(predictionListElement); // Remove ID after execution
-    }, 200);
-    blurHideTimeouts.set(predictionListElement, timeoutId);
+  // Restore original blur listener
+  inputElement.addEventListener('blur', () => {
+    setTimeout(() => hidePredictions(predictionListElement), 200);
   });
 
   inputElement.addEventListener('focus', () => {
