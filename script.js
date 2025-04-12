@@ -1342,6 +1342,13 @@ async function handleBuildingSelectChange(buildingSelectElement, activeBuildingN
   await fetchAndRenderDeteriorations(currentProjectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
 }
 
+// ★ 再追加: recordLastAddedData 関数 (連続登録用)
+function recordLastAddedData(location, name) {
+    lastAddedLocation = location;
+    lastAddedName = name;
+    console.log(`[recordLastAddedData] Recorded last added: Location="${lastAddedLocation}", Name="${lastAddedName}"`);
+}
+
 // ======================================================================
 // 11. Event Handlers - Deterioration Form
 // ======================================================================
