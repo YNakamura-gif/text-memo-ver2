@@ -539,13 +539,11 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
 // ======================================================================
 // 8. Core Data Loading & UI Setup Functions
 // ======================================================================
-// Modified to target the select element in the info tab
-async function loadProjectsAndSetupSelector(infoProjectSelectElement, buildingSelectElement) { 
-    console.log("[loadProjectsAndSetupSelector] Loading projects for info tab select...");
-    infoProjectSelectElement.innerHTML = '<option value="">-- 既存の現場を選択 --</option>'; 
-    // Building select element reset remains the same
-    buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>'; 
-    buildingSelectElement.disabled = true;
+// Renamed from loadProjectsAndSetupSelector
+async function populateProjectDataList(projectDataListElement) { 
+    console.log("[populateProjectDataList] Populating project datalist...");
+    projectDataListElement.innerHTML = ''; // Clear existing options
+    // Removed buildingSelectElement reset logic from here
     try {
         const projectsRef = database.ref('projects');
         const snapshot = await projectsRef.once('value');
@@ -554,32 +552,30 @@ async function loadProjectsAndSetupSelector(infoProjectSelectElement, buildingSe
             const projectPromises = Object.keys(projectsData).map(async (projectId) => {
                 const infoSnap = await getProjectInfoRef(projectId).once('value');
                 const infoData = infoSnap.val();
-                return { id: projectId, name: infoData?.siteName || projectId }; 
+                // Return just the name for the datalist value
+                return infoData?.siteName || projectId; 
             });
-            const projectsList = await Promise.all(projectPromises);
+            let projectsList = await Promise.all(projectPromises);
             // Sort descending by name
-            projectsList.sort((a, b) => b.name.localeCompare(a.name, 'ja')); 
+            projectsList = projectsList.filter(name => name); // Remove null/empty names
+            projectsList.sort((a, b) => b.localeCompare(a, 'ja')); 
+            
+            // Filter unique names before adding
+            const uniqueNames = [...new Set(projectsList)];
 
-            // ★ 重複排除ロジックを追加 (remains the same)
-            const addedNames = new Set(); 
-            projectsList.forEach(project => {
-                if (!addedNames.has(project.name)) {
-                    const option = document.createElement('option');
-                    option.value = project.id;
-                    option.textContent = project.name;
-                    infoProjectSelectElement.appendChild(option); // Append to the new select
-                    addedNames.add(project.name); 
-                } else {
-                    console.warn(`[loadProjectsAndSetupSelector] Duplicate site name found: "${project.name}" (Project ID: ${project.id} was skipped)`);
-                }
+            uniqueNames.forEach(projectName => {
+                const option = document.createElement('option');
+                option.value = projectName;
+                // option.textContent = projectName; // Not needed for datalist
+                projectDataListElement.appendChild(option);
             });
-            console.log(`[loadProjectsAndSetupSelector] Loaded ${projectsList.length} unique projects.`);
+            console.log(`[populateProjectDataList] Populated ${uniqueNames.length} unique projects.`);
         } else {
-            console.log("[loadProjectsAndSetupSelector] No projects found.");
+            console.log("[populateProjectDataList] No projects found.");
         }
     } catch (error) {
-        console.error("[loadProjectsAndSetupSelector] Error loading projects:", error);
-        alert("現場リストの読み込み中にエラーが発生しました。");
+        console.error("[populateProjectDataList] Error loading projects:", error);
+        // Don't alert here, maybe log is enough
     }
 }
 
@@ -708,7 +704,7 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
 // ======================================================================
 // 9. Event Handlers
 // ======================================================================
-async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, buildingNameInput, infoProjectSelectElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
+async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, buildingNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
     const surveyDate = surveyDateInput.value;
     const siteName = siteNameInput.value.trim();
     const buildingName = buildingNameInput.value.trim();
@@ -720,22 +716,32 @@ async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, build
     console.log(`Adding project '${projectId}', building '${buildingId}'`);
     
     try {
-        await Promise.all([
-            getProjectInfoRef(projectId).set({ siteName: siteName, surveyDate: surveyDate }),
-            getBuildingsRef(projectId).child(buildingId).set({ name: buildingName })
-        ]);
+        // Check if project with the same name already exists in datalist to avoid duplicates
+        const existingOption = Array.from(projectDataListElement.options).find(opt => opt.value === siteName);
+        if (existingOption) {
+             // Project already exists, just add the building
+             console.log(`Project "${siteName}" already exists. Adding building only.`);
+             currentProjectId = projectId; // Ensure currentProjectId is set
+             await getBuildingsRef(projectId).child(buildingId).set({ name: buildingName });
+        } else {
+            // New project, add info and building
+            await Promise.all([
+                getProjectInfoRef(projectId).set({ siteName: siteName, surveyDate: surveyDate }),
+                getBuildingsRef(projectId).child(buildingId).set({ name: buildingName })
+            ]);
+            // Update datalist after adding new project
+            await populateProjectDataList(projectDataListElement);
+        }
+        
         console.log(`Success: Added/Updated project '${projectId}', building '${buildingId}'.`);
         
-        currentProjectId = projectId;
-        currentBuildingId = buildingId;
+        currentProjectId = projectId; // Set current project ID
+        currentBuildingId = buildingId; // Set current building ID
         localStorage.setItem('lastProjectId', currentProjectId);
         localStorage.setItem('lastBuildingId', currentBuildingId); 
         
-        // Update UI - Reload project list in the info tab
-        await loadProjectsAndSetupSelector(infoProjectSelectElement, buildingSelectElement);
-        infoProjectSelectElement.value = projectId; // Select the newly added project
-
-        // Update active project name display
+        // Update UI 
+        siteNameInput.value = siteName; // Ensure input shows the name
         activeProjectNameSpanElement.textContent = escapeHtml(siteName);
         
         // Update building list for the selected project (will include the new one)
@@ -923,53 +929,53 @@ async function handleContinuousAdd(photoNumberInput, nextIdDisplayElement) {
 // ======================================================================
 // 10. Listener Setup Functions
 // ======================================================================
-// Modified to remove project select listener here, handled in setupSelectionListeners
-function setupBasicInfoListeners(surveyDateInput, siteNameInput, infoProjectSelectElement) {
-    // Survey date save handler
-    const saveDateHandler = () => saveBasicInfo(surveyDateInput, siteNameInput); 
-    surveyDateInput.addEventListener('change', saveDateHandler);
-
-    // When site name input changes manually, deselect the project dropdown
-    siteNameInput.addEventListener('input', () => {
-        if (infoProjectSelectElement.value !== "") {
-            infoProjectSelectElement.value = ""; // Reset selection
-            // Trigger change event to reset dependent state (buildings etc.)
-            infoProjectSelectElement.dispatchEvent(new Event('change')); 
-        }
-    });
-    
-    console.log("[setupBasicInfoListeners] Listeners for surveyDate and siteName input attached.");
-}
-
-// Modified to set up listeners for both project and building selects
-function setupSelectionListeners(infoProjectSelectElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, surveyDateInput, siteNameInput) {
+// Modified to set up listeners for siteName input and building select
+function setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, surveyDateInput) {
     console.log("[setupSelectionListeners] Setting up listeners...");
     
-    // Project Selection Change Listener (Info Tab)
-    infoProjectSelectElement.addEventListener('change', async (event) => {
-        const selectedProjectId = event.target.value;
-        console.log(`[ProjectSelect Change (Info Tab)] Selected projectId: ${selectedProjectId}`);
-        currentProjectId = selectedProjectId; 
-        localStorage.setItem('lastProjectId', currentProjectId);
-        currentBuildingId = null; // Reset building context when project changes
-        localStorage.removeItem('lastBuildingId'); 
+    let projectDataListOptions = []; // Cache datalist options
+    // Function to update the cache
+    const updateDataListCache = () => {
+        projectDataListOptions = Array.from(projectDataListElement.options).map(opt => opt.value);
+    };
+    // Initial population and setup mutation observer for dynamic changes
+    updateDataListCache(); 
+    const observer = new MutationObserver(updateDataListCache);
+    observer.observe(projectDataListElement, { childList: true });
+
+    // Project Selection/Input Change Listener (Info Tab)
+    siteNameInput.addEventListener('change', async (event) => { // Use 'change' to trigger after losing focus or selecting from datalist
+        const enteredSiteName = event.target.value.trim();
+        console.log(`[SiteName Change (Info Tab)] Entered/Selected: "${enteredSiteName}"`);
+
+        // Check if the entered name exists in the datalist
+        const projectId = generateProjectId(enteredSiteName);
+        const isValidExistingProject = projectDataListOptions.includes(enteredSiteName) && projectId;
         
-        // Update display names and building selector
-        if (selectedProjectId) {
-            const selectedOption = infoProjectSelectElement.options[infoProjectSelectElement.selectedIndex];
-            siteNameInput.value = selectedOption.text; // Update site name input
-            activeProjectNameSpanElement.textContent = escapeHtml(selectedOption.text); // Update display in detail tab
-            await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput); // Reload survey date
+        if (isValidExistingProject) {
+            console.log(`Found existing project: ${projectId}`);
+            currentProjectId = projectId;
+            localStorage.setItem('lastProjectId', currentProjectId);
+            currentBuildingId = null;
+            localStorage.removeItem('lastBuildingId');
+
+            // Update displays and load related data
+            activeProjectNameSpanElement.textContent = escapeHtml(enteredSiteName);
+            await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput); 
             await updateBuildingSelectorForProject(
-                selectedProjectId, buildingSelectElement, activeBuildingNameSpanElement, 
+                currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, 
                 nextIdDisplayElement, deteriorationTableBodyElement, 
                 editModalElement, editIdDisplay, editLocationInput, 
                 editDeteriorationNameInput, editPhotoNumberInput
             );
         } else {
-            // Project deselected
-            siteNameInput.value = '';
-            surveyDateInput.value = '';
+            console.log(`"${enteredSiteName}" is a new project name or invalid selection.`);
+            // Treat as new project entry (or invalid), reset associated data
+            currentProjectId = null; 
+            localStorage.removeItem('lastProjectId'); 
+            currentBuildingId = null;
+            localStorage.removeItem('lastBuildingId');
+            surveyDateInput.value = ''; // Clear survey date for new project
             activeProjectNameSpanElement.textContent = '未選択';
             buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
             buildingSelectElement.disabled = true;
@@ -1043,11 +1049,11 @@ async function initializeApp() {
     // --- 1. Get Global Element References ---
     const surveyDateInput = document.getElementById('surveyDate');
     const siteNameInput = document.getElementById('siteName');
-    const infoProjectSelectElement = document.getElementById('infoProjectSelect'); // Added
+    const projectDataListElement = document.getElementById('projectDataList'); // Added
     const buildingNameInput = document.getElementById('buildingName');
     const addBuildingBtn = document.getElementById('addBuildingBtn');
     const buildingSelectElement = document.getElementById('buildingSelect');
-    const activeProjectNameSpanElement = document.getElementById('activeProjectName'); // Added
+    const activeProjectNameSpanElement = document.getElementById('activeProjectName');
     const activeBuildingNameSpanElement = document.getElementById('activeBuildingName');
     const infoTabBtn = document.getElementById('infoTabBtn');
     const detailTabBtn = document.getElementById('detailTabBtn');
@@ -1082,64 +1088,56 @@ async function initializeApp() {
     await loadPredictionData();
     console.log("Prediction data loading complete.");
 
-    // --- 4. Load Project List (Target the new select in infoTab) ---
-    await loadProjectsAndSetupSelector(infoProjectSelectElement, buildingSelectElement);
-    console.log("Project list loading complete.");
+    // --- 4. Load Project List (Populate datalist) ---
+    await populateProjectDataList(projectDataListElement); // Changed function name and argument
+    console.log("Project datalist population complete.");
 
     // --- 5. Restore Last State (Project & Building) ---
     const lastProjectId = localStorage.getItem('lastProjectId');
-    if (lastProjectId && infoProjectSelectElement.querySelector(`option[value="${lastProjectId}"]`)) { // Check the new select
-        console.log(`Restoring last project: ${lastProjectId}`);
-        infoProjectSelectElement.value = lastProjectId; // Set value on the new select
-        currentProjectId = lastProjectId; 
-        await loadBasicInfo(currentProjectId, surveyDateInput, siteNameInput); // Load info for the project
-        // ★ Update active project name display
-        const selectedProjectOption = infoProjectSelectElement.options[infoProjectSelectElement.selectedIndex];
-        if (activeProjectNameSpanElement && selectedProjectOption) {
-            activeProjectNameSpanElement.textContent = escapeHtml(selectedProjectOption.text);
+    // Find project name from datalist based on lastProjectId for restoration
+    let lastProjectName = '';
+    if (lastProjectId) {
+        const optionFound = Array.from(projectDataListElement.options).find(opt => generateProjectId(opt.value) === lastProjectId);
+        if (optionFound) {
+            lastProjectName = optionFound.value;
         }
-        await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
-        
-        // Wait slightly for building options to populate via listener
-        await new Promise(resolve => setTimeout(resolve, 350)); 
-        
-        const lastBuildingId = localStorage.getItem('lastBuildingId');
-        if (lastBuildingId && buildingSelectElement.querySelector(`option[value="${lastBuildingId}"]`)) {
-            console.log(`Restoring last building: ${lastBuildingId}`);
-            buildingSelectElement.value = lastBuildingId;
-            // Fetch and render data for the restored building
-            await fetchAndRenderDeteriorations(currentProjectId, lastBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
-            currentBuildingId = lastBuildingId; // Ensure global state is set AFTER loading
-            activeBuildingNameSpanElement.textContent = escapeHtml(buildingSelectElement.options[buildingSelectElement.selectedIndex].text);
-        } else {
-             console.log("Last building not found or invalid, leaving building unselected.");
-        }
+    }
+    
+    if (lastProjectId && lastProjectName) { // Restore only if ID and Name are found
+        console.log(`Restoring last project: ${lastProjectId} (${lastProjectName})`);
+        siteNameInput.value = lastProjectName; // Set site name input
+        currentProjectId = lastProjectId;
+        // Trigger change event on siteNameInput to load dependent data
+        siteNameInput.dispatchEvent(new Event('change')); 
     } else {
-        console.log("No valid last project found.");
+        console.log("No valid last project found or name mismatch.");
         currentProjectId = null; // Ensure reset
+        // Explicitly reset building select and detail display if no project restored
+        buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
+        buildingSelectElement.disabled = true;
+        activeProjectNameSpanElement.textContent = '未選択';
+        activeBuildingNameSpanElement.textContent = '未選択';
     }
 
     // --- 6. Setup ALL Event Listeners --- 
     console.log("Setting up event listeners...");
-    // Tabs (No changes needed here for logic, only removed check previously)
+    // Tabs (No changes needed)
     infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
     detailTabBtn.addEventListener('click', () => {
         switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
     });
-    // Predictions (No changes needed here)
+    // Predictions (No changes needed)
     if (locationInput && locationPredictionsList) setupPredictionListeners(locationInput, locationPredictionsList, generateLocationPredictions, 'deteriorationNameInput');
     if (deteriorationNameInput && suggestionsContainer) setupPredictionListeners(deteriorationNameInput, suggestionsContainer, generateDeteriorationPredictions, 'photoNumberInput'); // ★ 修正
     if (editLocationInput && editLocationPredictionsList) setupPredictionListeners(editLocationInput, editLocationPredictionsList, generateLocationPredictions, 'editDeteriorationNameInput');
     if (editDeteriorationNameInput && editSuggestionsContainer) setupPredictionListeners(editDeteriorationNameInput, editSuggestionsContainer, generateDeteriorationPredictions, 'editPhotoNumberInput'); // ★ 修正
-    // Basic Info (Need to adjust how project selection works)
-    setupBasicInfoListeners(surveyDateInput, siteNameInput, infoProjectSelectElement); // Pass new select element
-    // Project/Building Management (Adjust to handle new select)
-    setupSelectionListeners(infoProjectSelectElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, surveyDateInput, siteNameInput);
-    // Add Project/Building (Adjust to update new select)
+    // Basic Info (Site name input handled by setupSelectionListeners)
+    setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, surveyDateInput);
+    // Add Project/Building (Needs adjustment)
     if (addBuildingBtn) { 
         addBuildingBtn.addEventListener('click', () => handleAddProjectAndBuilding(
             surveyDateInput, siteNameInput, buildingNameInput, 
-            infoProjectSelectElement, // Pass new select
+            projectDataListElement, // Pass datalist
             buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, 
             nextIdDisplayElement, deteriorationTableBodyElement, 
             editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, 
@@ -1148,12 +1146,12 @@ async function initializeApp() {
     } else { 
         console.error("Add button not found"); 
     }
-    // Forms & Buttons (No changes needed here)
+    // Forms & Buttons (Adjust export handler call)
     if (deteriorationForm) deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement));
     if (editForm) editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, editModalElement));
     if (cancelEditBtn) cancelEditBtn.addEventListener('click', () => editModalElement.classList.add('hidden'));
     if (continuousAddBtn) continuousAddBtn.addEventListener('click', () => handleContinuousAdd(photoNumberInput, nextIdDisplayElement));
-    if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => handleExportCsv(infoProjectSelectElement, buildingSelectElement));
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', () => handleExportCsv(siteNameInput, buildingSelectElement)); // Pass siteNameInput
 
     console.log("Initialization complete.");
 }
@@ -1186,16 +1184,29 @@ function downloadCsv(csvContent, filename) {
 }
 
 // ★★★ handleExportCsv 関数定義のコメントアウトを解除 ★★★
-function handleExportCsv(infoProjectSelectElement, buildingSelectElement) {
-    if (!currentProjectId) { alert("プロジェクトが特定できません。基本情報を入力してください。"); return; }
+function handleExportCsv(siteNameInput, buildingSelectElement) {
+    // Use currentProjectId instead of reading from input/select for reliability
+    if (!currentProjectId) { alert("プロジェクトが選択されていません。基本情報タブで現場を選択または入力してください。"); return; }
+    
     const targetBuildingId = buildingSelectElement.value;
     if (!targetBuildingId) { alert("CSVをダウンロードする建物を選択してください。"); return; }
+    
     const csvContent = generateCsvContent(targetBuildingId);
     if (csvContent) {
-      const siteName = infoProjectSelectElement.options[infoProjectSelectElement.selectedIndex].text || 'プロジェクト'; // Get selected project name from info tab select
+      // Get project name from the current state or input field
+      const siteName = siteNameInput.value.trim() || 'プロジェクト'; 
       const safeSiteName = siteName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-      const safeBuildingName = buildingSelectElement.options[buildingSelectElement.selectedIndex].text.replace(/[^a-zA-Z0-9_\-]/g, '_'); // Get selected building name
+      // Building name retrieval remains the same
+      const safeBuildingName = buildingSelectElement.options[buildingSelectElement.selectedIndex].text.replace(/[^a-zA-Z0-9_\-]/g, '_'); 
       const filename = `${safeSiteName}_${safeBuildingName}_劣化情報.csv`;
       downloadCsv(csvContent, filename);
     }
+}
+
+// Only setup survey date listener here
+function setupBasicInfoListeners(surveyDateInput, siteNameInput) {
+    // Survey date save handler
+    const saveDateHandler = () => saveBasicInfo(surveyDateInput, siteNameInput); 
+    surveyDateInput.addEventListener('change', saveDateHandler);
+    console.log("[setupBasicInfoListeners] Listener for surveyDate attached.");
 } 

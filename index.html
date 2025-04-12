@@ -44,15 +44,12 @@
           <input
             type="text"
             id="siteName"
-            placeholder="新規現場名を入力"
+            placeholder="現場名を入力または選択"
             class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+            list="projectDataList"
           >
-          <select
-            id="infoProjectSelect"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- 既存の現場を選択 --</option>
-          </select>
+          <datalist id="projectDataList">
+          </datalist>
         </div>
         
         <div class="mb-4">
