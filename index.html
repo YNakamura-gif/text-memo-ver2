@@ -44,9 +44,15 @@
           <input
             type="text"
             id="siteName"
-            placeholder="現場名を入力"
+            placeholder="新規現場名を入力"
+            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+          >
+          <select
+            id="infoProjectSelect"
             class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
+            <option value="">-- 既存の現場を選択 --</option>
+          </select>
         </div>
         
         <div class="mb-4">
@@ -74,35 +80,23 @@
 
     <!-- 劣化情報タブ -->
     <div id="detailTab" class="tab-content hidden">
-      <!-- ★★★ レスポンシブ対応: md以上で横並び、それ以下で縦積み ★★★ -->
-      <div class="mb-4 md:flex md:space-x-4"> <!-- md以上でflex適用 -->
-        <!-- 現場選択ドロップダウン -->
-        <div class="mb-4 md:mb-0 md:flex-1"> <!-- 小画面ではマージン、md以上でflex-1 -->
-          <label for="projectSelect" class="block text-sm font-medium text-gray-700 mb-1">現場選択</label>
-          <select
-            id="projectSelect"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- 現場を選択 --</option>
-            <!-- プロジェクトオプションがJSで動的に追加されます -->
-          </select>
-        </div>
-        <!-- 建物選択ドロップダウン -->
-        <div class="md:flex-1"> <!-- md以上でflex-1 -->
-          <label for="buildingSelect" class="block text-sm font-medium text-gray-700 mb-1">建物選択</label>
-          <select
-            id="buildingSelect"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled <!-- 初期状態では無効 -->
-          >
-             <option value="">-- 現場を先に選択 --</option>
-            <!-- 建物オプションがJSで動的に追加されます -->
-          </select>
-        </div>
+      <div class="mb-4 text-center">
+        <span class="font-semibold">現場:</span> <span id="activeProjectName" class="mr-4">未選択</span>
+        <span class="font-semibold">建物:</span> <span id="activeBuildingName">未選択</span>
       </div>
-      <!-- ★★★ 変更ここまで ★★★ -->
 
-      <h2 class="text-lg font-semibold mb-4">劣化情報入力: <span id="activeBuildingName"></span></h2>
+      <div class="mb-4">
+        <label for="buildingSelect" class="block text-sm font-medium text-gray-700 mb-1">建物選択</label>
+        <select
+          id="buildingSelect"
+          class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled
+        >
+          <option value="">-- 現場を先に選択 --</option>
+        </select>
+      </div>
+
+      <h2 class="text-lg font-semibold mb-4">劣化情報入力</h2>
       
       <form id="deteriorationForm" class="bg-white p-4 rounded-md shadow-sm mb-4">
         <div class="grid grid-cols-12 gap-x-2 gap-y-1 items-end">
@@ -121,7 +115,6 @@
                 class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
               >
               <ul id="locationPredictions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
-                <!-- 候補はここにJSで挿入される -->
               </ul>
             </div>
           </div>
@@ -136,7 +129,6 @@
                 class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
               >
               <div id="suggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
-                <!-- 候補はここにJSで挿入される -->
               </div>
             </div>
           </div>
@@ -186,11 +178,9 @@
             </tr>
           </thead>
           <tbody id="deteriorationTableBody" class="bg-white divide-y divide-gray-200">
-            <!-- 劣化情報の行がJSで動的に追加されます -->
           </tbody>
         </table>
 
-        <!-- ★★★ CSV出力ボタンをここに追加 ★★★ -->
         <div class="mt-6">
           <button
             id="exportCsvBtn"
@@ -199,48 +189,39 @@
             CSVファイルでダウンロード
           </button>
         </div>
-        <!-- ★★★ 追加ここまで ★★★ -->
 
       </div>
     </div>
   </main>
 
-  <!-- ★★★ 編集モーダルを追加 ★★★ -->
   <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
       <h2 class="text-xl font-bold mb-4">劣化情報の編集</h2>
       <form id="editForm">
-        <!-- 番号 -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">番号</label>
           <div id="editIdDisplay" class="w-full p-2 bg-gray-100 border border-gray-300 rounded-md"></div>
         </div>
-        <!-- 場所 -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">場所</label>
           <div class="relative overflow-visible">
             <input id="editLocationInput" type="text" placeholder="場所を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <ul id="editLocationPredictions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
-              <!-- 候補はここにJSで挿入される -->
             </ul>
           </div>
         </div>
-        <!-- 劣化名 -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
           <div class="relative overflow-visible">
             <input id="editDeteriorationNameInput" type="text" placeholder="劣化名を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div id="editSuggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
-              <!-- 候補はここにJSで挿入される -->
             </div>
           </div>
         </div>
-        <!-- 写真番号 -->
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">写真番号</label>
           <input id="editPhotoNumberInput" type="text" placeholder="番号" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
-        <!-- ボタン -->
         <div class="flex justify-end space-x-3 mt-6">
           <button type="button" id="cancelEditBtn" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">キャンセル</button>
           <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">保存</button>
@@ -248,20 +229,14 @@
       </form>
     </div>
   </div>
-  <!-- ★★★ モーダル追加ここまで ★★★ -->
 
   <footer class="bg-gray-200 p-3 text-center text-sm text-gray-600 mt-8">
     <p>© <span id="currentYear"></span> 12条点検劣化調査アプリ</p>
   </footer>
 
-  <!-- Firebase SDK -->
-  <!-- TODO: Add Firebase SDK scripts here -->
-  <!-- NOTE: Consider using latest versions from Firebase documentation -->
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-  <!-- <script src="locations.js"></script> -->
-  <!-- <script src="deteriorations.js"></script> -->
   <script src="script.js"></script>
 </body>
 </html> 
