@@ -1143,60 +1143,59 @@ async function initializeApp() {
   currentYearSpan.textContent = new Date().getFullYear();
 
   // --- Initial State Loading ---
-  // Fetch initial project list (from cache or Firebase)
+  let initialTab = 'info'; // デフォルトタブ
+
+  // Fetch initial project list and populate datalist
   const initialProjectNames = await populateProjectDataList(projectDataListElement);
-  // Populate the datalist with sorted names (recent first)
   updateDatalistWithOptions(initialProjectNames, projectDataListElement);
 
-  // ★ 修正: 前回選択した現場・建物の復元処理のコメントアウトを解除
-  // Load last used project and building from localStorage
+  // Try to restore last project and building
   const lastProjectId = localStorage.getItem('lastProjectId');
   const lastBuildingId = localStorage.getItem('lastBuildingId');
+  let projectRestored = false;
+  let buildingRestored = false;
 
   if (lastProjectId) {
-    console.log(`[Init] Found last project ID: ${lastProjectId}`);
-    currentProjectId = lastProjectId;
-    // Load basic info (site name) for the last project
-    await loadBasicInfo(currentProjectId, siteNameInput);
-    
-    // Get the site name associated with the loaded project ID
-    const projectInfoRef = getProjectInfoRef(currentProjectId);
+    console.log(`[Init] Attempting to restore project ID: ${lastProjectId}`);
+    // Validate project exists and get its name
+    const projectInfoRef = getProjectInfoRef(lastProjectId);
     const infoSnapshot = await projectInfoRef.once('value');
-    let restoredSiteName = '不明な現場';
     if (infoSnapshot.exists()) {
-        restoredSiteName = infoSnapshot.val().siteName || '不明な現場';
-        activeProjectNameSpanElement.textContent = restoredSiteName;
-        // Add the restored site name to the recent list (or move it up)
-        // This ensures the last session's project starts at the top
-        addProjectToRecentList(restoredSiteName);
-        // Re-populate the datalist immediately to reflect the updated recent list
-        updateDatalistWithOptions(initialProjectNames, projectDataListElement);
-    } else {
-        activeProjectNameSpanElement.textContent = restoredSiteName;
-        console.warn(`[Init] Could not find info for last project ID: ${lastProjectId}`);
-    }
+      currentProjectId = lastProjectId; // Set currentProjectId only if valid
+      const restoredSiteName = infoSnapshot.val().siteName || '不明な現場';
+      siteNameInput.value = restoredSiteName; // Set input value as well
+      activeProjectNameSpanElement.textContent = restoredSiteName;
+      addProjectToRecentList(restoredSiteName);
+      updateDatalistWithOptions(initialProjectNames, projectDataListElement); // Update list with recent item potentially moved up
+      projectRestored = true;
+      console.log(`[Init] Project ${currentProjectId} (${restoredSiteName}) restored.`);
 
-    // Load buildings for the restored project
-    await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+      // Now attempt to load buildings for the restored project
+      // Pass lastBuildingId as a hint to updateBuildingSelectorForProject
+      lastUsedBuilding = lastBuildingId; 
+      await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+      // updateBuildingSelectorForProject should set currentBuildingId if successful
 
-    // Load last used building if applicable
-    if (lastBuildingId && buildings[lastBuildingId]) { 
-      console.log(`[Init] Found last building ID: ${lastBuildingId}`);
-      currentBuildingId = lastBuildingId;
-      buildingSelectElement.value = currentBuildingId;
-      activeBuildingNameSpanElement.textContent = buildings[currentBuildingId]?.name || '不明な建物';
-      await fetchAndRenderDeteriorations(currentProjectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
-      // ★ タブ状態復元は下の処理で行うため、ここでの switchTab は削除
-      // switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
+      // Check if the building was actually restored successfully
+      if (currentBuildingId === lastBuildingId && currentBuildingId !== null) {
+          buildingRestored = true;
+          console.log(`[Init] Building ${currentBuildingId} restored successfully for project ${currentProjectId}.`);
+          // Deterioration data is fetched within updateBuildingSelectorForProject or its subsequent calls
+      } else {
+         console.log(`[Init] Failed to restore building ID ${lastBuildingId} (current is ${currentBuildingId}). Building not fully restored.`);
+         // Keep buildingRestored = false
+      }
     } else {
-        console.log(`[Init] Last building ID (${lastBuildingId}) not found or invalid for project ${lastProjectId}. Staying on info tab.`);
-        activeBuildingNameSpanElement.textContent = '未選択';
-        updateNextIdDisplay(currentProjectId, null, nextIdDisplayElement); 
-        renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+      console.warn(`[Init] Last project ID ${lastProjectId} not found in database. Clearing stored IDs.`);
+      localStorage.removeItem('lastProjectId');
+      localStorage.removeItem('lastBuildingId');
+      // Keep projectRestored = false
     }
-  } else {
-    // No last project ID found - Set default initial state
-    console.log("[Init] No last project ID found. Setting default initial state.");
+  }
+
+  // If no project was restored, set default UI state
+  if (!projectRestored) {
+    console.log("[Init] No project restored. Setting default UI state.");
     siteNameInput.value = ''; 
     activeProjectNameSpanElement.textContent = '未選択';
     activeBuildingNameSpanElement.textContent = '未選択';
@@ -1206,15 +1205,17 @@ async function initializeApp() {
     renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   }
 
-  // ★ 修正: タブ状態を復元
+  // Determine initial tab based on restored state AND localStorage
   const lastActiveTabId = localStorage.getItem('lastActiveTabId');
-  let initialTab = 'info'; // デフォルトは情報タブ
-  if (lastActiveTabId === 'detail' && currentProjectId && currentBuildingId) { // 劣化情報タブを開ける条件
+  if (lastActiveTabId === 'detail' && projectRestored && buildingRestored) {
     initialTab = 'detail';
-    console.log("[Init] Restoring to detail tab.");
+    console.log("[Init] Conditions met. Restoring to detail tab.");
   } else {
-    console.log(`[Init] Setting initial tab to info (LastTab: ${lastActiveTabId}, Project: ${currentProjectId}, Building: ${currentBuildingId})`);
+    initialTab = 'info'; // Default to info if conditions not met
+    console.log(`[Init] Setting initial tab to info (Reason: LastTab='${lastActiveTabId}', ProjectRestored=${projectRestored}, BuildingRestored=${buildingRestored})`);
   }
+
+  // Finally, switch to the determined initial tab
   switchTab(initialTab, infoTabBtn, detailTabBtn, infoTab, detailTab);
 
   console.log("App initialized.");
