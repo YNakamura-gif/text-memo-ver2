@@ -1120,7 +1120,7 @@ async function initializeApp() {
   );
 
   // Deterioration Form Submission
-  deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement));
+  deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement, locationPredictionsElement));
   continuousAddBtn.addEventListener('click', () => handleContinuousAdd(photoNumberInput, nextIdDisplayElement));
 
   // Input Predictions (Deterioration Form)
@@ -1346,49 +1346,68 @@ async function handleBuildingSelectChange(buildingSelectElement, activeBuildingN
 // 11. Event Handlers - Deterioration Form
 // ======================================================================
 
-// ★ 再追加: handleDeteriorationSubmit 関数
-function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement) {
+// ★ 再追加: handleDeteriorationSubmit 関数 (引数に locationPredictionsElement を追加)
+function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement, locationPredictionsElement) {
   event.preventDefault();
   const location = locationInput.value.trim();
   const deteriorationName = deteriorationNameInput.value.trim();
   const photoNumber = photoNumberInput.value.trim();
+  
+  // ★ 写真番号のバリデーションを追加
+  if (!/^[0-9]*$/.test(photoNumber)) {
+    alert("写真番号は半角数字で入力してください。");
+    // 全角数字が含まれていたら半角に変換して再試行を促すか、ここで処理を中断する
+    // 例: photoNumberInput.value = zenkakuToHankaku(photoNumber); // 半角に変換
+    return; // ここでは処理を中断
+  }
 
   if (!location || !deteriorationName || !photoNumber) {
     alert("すべてのフィールドを入力してください。");
     return;
   }
 
-  const projectId = generateProjectId(location);
-  const buildingId = generateBuildingId(deteriorationName);
-
-  if (!projectId || !buildingId) {
-    alert("現場名または劣化項目名が無効です。");
+  // ★ projectId と buildingId は現在の選択状態から取得する
+  if (!currentProjectId || !currentBuildingId) {
+    alert("現場名または建物名が選択されていません。");
     return;
   }
 
-  console.log(`[handleDeteriorationSubmit] Submitting new deterioration for project ID: ${projectId}, building ID: ${buildingId}`);
+  console.log(`[handleDeteriorationSubmit] Submitting new deterioration for project ID: ${currentProjectId}, building ID: ${currentBuildingId}`);
 
-  const deteriorationData = {
-    location: location,
-    name: deteriorationName,
-    photoNumber: photoNumber,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
-  };
+  // 次の番号を取得してデータに含める
+  getNextDeteriorationNumber(currentProjectId, currentBuildingId).then(nextNumber => {
+    const deteriorationData = {
+      number: nextNumber, // ★ 取得した番号を追加
+      location: location,
+      name: deteriorationName,
+      photoNumber: photoNumber,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
-  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
-  deteriorationRef.push(deteriorationData)
-    .then(() => {
-      console.log("[handleDeteriorationSubmit] New deterioration submitted successfully.");
-      hidePredictions(locationPredictionsElement);
-      locationInput.value = '';
-      deteriorationNameInput.value = '';
-      photoNumberInput.value = '';
-      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
-    })
-    .catch(error => {
-      console.error("[handleDeteriorationSubmit] Error submitting new deterioration:", error);
-      alert("情報の保存中にエラーが発生しました: " + error.message);
-    });
+    const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+    deteriorationRef.push(deteriorationData)
+      .then(() => {
+        console.log("[handleDeteriorationSubmit] New deterioration submitted successfully.");
+        hidePredictions(locationPredictionsElement); // ★ ここで locationPredictionsElement を使用
+        // フォームをクリア
+        locationInput.value = '';
+        deteriorationNameInput.value = '';
+        photoNumberInput.value = '';
+        // 次の番号表示を更新 (カウンターは transaction でインクリメントされているはずなので再取得)
+        updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
+        // 最後に登録したデータを記録
+        recordLastAddedData(location, deteriorationName);
+        // 場所入力にフォーカスを戻す
+        locationInput.focus();
+      })
+      .catch(error => {
+        console.error("[handleDeteriorationSubmit] Error submitting new deterioration:", error);
+        alert("情報の保存中にエラーが発生しました: " + error.message);
+      });
+  }).catch(error => {
+      console.error("[handleDeteriorationSubmit] Error getting next deterioration number:", error);
+      alert("次の劣化番号の取得中にエラーが発生しました: " + error.message);
+  });
 }
 
 // ★ 再追加: handleContinuousAdd 関数
