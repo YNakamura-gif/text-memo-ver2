@@ -1145,6 +1145,8 @@ async function initializeApp() {
   // Populate the datalist with sorted names (recent first)
   updateDatalistWithOptions(initialProjectNames, projectDataListElement);
 
+  // ★ 削除: 前回選択した現場・建物の復元処理をコメントアウト
+  /*
   // Load last used project and building from localStorage
   const lastProjectId = localStorage.getItem('lastProjectId');
   const lastBuildingId = localStorage.getItem('lastBuildingId');
@@ -1199,6 +1201,18 @@ async function initializeApp() {
     updateNextIdDisplay(null, null, nextIdDisplayElement); 
     renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   }
+  */
+
+  // ★ 追加: 常に初期状態にするための処理
+  console.log("[Init] Setting default initial state.");
+  siteNameInput.value = ''; // 現場名入力欄を空にする
+  activeProjectNameSpanElement.textContent = '未選択';
+  activeBuildingNameSpanElement.textContent = '未選択';
+  buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
+  buildingSelectElement.disabled = true;
+  updateNextIdDisplay(null, null, nextIdDisplayElement); 
+  renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+  switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab); // Ensure info tab is active
 
   console.log("App initialized.");
 }
