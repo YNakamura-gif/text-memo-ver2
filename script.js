@@ -709,13 +709,16 @@ function updateDatalistWithOptions(allProjectNames, projectDataListElement) {
   const recentNames = getRecentProjectNames();
   const recentSet = new Set(recentNames); // For efficient lookup
 
+  // Ensure allProjectNames is an array of unique names
+  const uniqueAllProjectNames = [...new Set(allProjectNames)];
+
   // Separate recent names present in allProjectNames and other names
-  const validRecentNames = recentNames.filter(name => allProjectNames.includes(name));
-  const otherNames = allProjectNames
+  const validRecentNames = recentNames.filter(name => uniqueAllProjectNames.includes(name));
+  const otherNames = uniqueAllProjectNames
     .filter(name => !recentSet.has(name))
     .sort((a, b) => a.localeCompare(b, 'ja')); // Sort remaining names alphabetically (Japanese)
 
-  // Combine: valid recent first, then others. Ensure uniqueness.
+  // Combine: valid recent first, then others. Ensure uniqueness again just in case.
   const finalSortedNames = [...new Set([...validRecentNames, ...otherNames])];
 
   // Update the datalist
@@ -742,7 +745,7 @@ async function populateProjectDataList(projectDataListElement) {
       const { timestamp, data } = JSON.parse(cachedData);
       if (Date.now() - timestamp < CACHE_EXPIRY) {
         console.log("[populateProjectDataList] Using cached project list.");
-        return data; // Return cached data
+        return data; // Return cached data (already unique from previous save)
       }
     }
   } catch (e) {
@@ -754,23 +757,22 @@ async function populateProjectDataList(projectDataListElement) {
   try {
     const snapshot = await database.ref('projects').once('value');
     const projects = snapshot.val();
-    const projectNames = [];
+    let projectNames = [];
     if (projects) {
-      Object.keys(projects).forEach(projectId => {
-        const projectName = projects[projectId]?.info?.siteName;
-        if (projectName) {
-          projectNames.push(projectName);
-        }
-      });
+      projectNames = Object.values(projects)
+                         .map(proj => proj?.info?.siteName)
+                         .filter(name => name); // Extract names and filter out falsy values
     }
-    // Store fresh data in cache
+    const uniqueProjectNames = [...new Set(projectNames)]; // Ensure uniqueness
+    
+    // Store fresh unique data in cache
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: projectNames }));
-      console.log("[populateProjectDataList] Fetched and cached project list.");
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: uniqueProjectNames }));
+      console.log("[populateProjectDataList] Fetched and cached unique project list.");
     } catch (e) {
       console.error("Error saving project list cache:", e);
     }
-    return [...new Set(projectNames)]; // ★ Return unique names directly
+    return uniqueProjectNames; // Return freshly fetched unique data
   } catch (error) {
     console.error("Error fetching project list from Firebase:", error);
     alert("現場リストの読み込みに失敗しました。");
