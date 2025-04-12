@@ -704,11 +704,11 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
 // ======================================================================
 // 9. Event Handlers
 // ======================================================================
-async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, buildingNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
+async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, buildingSelectPresetElement, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
     const surveyDate = surveyDateInput.value;
     const siteName = siteNameInput.value.trim();
-    const buildingName = buildingNameInput.value.trim();
-    if (!surveyDate || !siteName || !buildingName) { alert('調査日、現場名、建物名をすべて入力してください。'); return; }
+    const buildingName = buildingSelectPresetElement.value; // Get value from select
+    if (!surveyDate || !siteName || !buildingName) { alert('調査日、現場名、建物名をすべて選択してください。'); return; } // Adjusted alert message
     
     const projectId = generateProjectId(siteName);
     const buildingId = generateBuildingId(buildingName);
@@ -716,50 +716,42 @@ async function handleAddProjectAndBuilding(surveyDateInput, siteNameInput, build
     console.log(`Adding project '${projectId}', building '${buildingId}'`);
     
     try {
-        // Check if project with the same name already exists in datalist to avoid duplicates
         const existingOption = Array.from(projectDataListElement.options).find(opt => opt.value === siteName);
         if (existingOption) {
-             // Project already exists, just add the building
              console.log(`Project "${siteName}" already exists. Adding building only.`);
-             currentProjectId = projectId; // Ensure currentProjectId is set
+             currentProjectId = projectId; 
              await getBuildingsRef(projectId).child(buildingId).set({ name: buildingName });
         } else {
-            // New project, add info and building
             await Promise.all([
                 getProjectInfoRef(projectId).set({ siteName: siteName, surveyDate: surveyDate }),
                 getBuildingsRef(projectId).child(buildingId).set({ name: buildingName })
             ]);
-            // Update datalist after adding new project
             await populateProjectDataList(projectDataListElement);
         }
         
         console.log(`Success: Added/Updated project '${projectId}', building '${buildingId}'.`);
         
-        currentProjectId = projectId; // Set current project ID
-        currentBuildingId = buildingId; // Set current building ID
+        currentProjectId = projectId; 
+        currentBuildingId = buildingId; 
         localStorage.setItem('lastProjectId', currentProjectId);
         localStorage.setItem('lastBuildingId', currentBuildingId); 
         
-        // Update UI 
-        siteNameInput.value = siteName; // Ensure input shows the name
+        siteNameInput.value = siteName; 
         activeProjectNameSpanElement.textContent = escapeHtml(siteName);
         
-        // Update building list for the selected project (will include the new one)
         await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
         
-        // Short delay to ensure building options are populated by listener
         await new Promise(resolve => setTimeout(resolve, 250)); 
         
         if (buildingSelectElement.querySelector(`option[value="${buildingId}"]`)) {
-             buildingSelectElement.value = buildingId; // Select the newly added building
-            // Manually trigger the handler to load its data
+             buildingSelectElement.value = buildingId; 
             await handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
         } else {
             console.warn("Newly added building not found in selector immediately after update.");
         }
 
         switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
-        buildingNameInput.value = ''; 
+        // buildingSelectPresetElement.value = ''; // No need to reset select value
         alert(`現場「${siteName}」に建物「${buildingName}」を追加し、選択しました。`);
     } catch (error) {
         console.error('Error adding project and building:', error);
@@ -1049,8 +1041,8 @@ async function initializeApp() {
     // --- 1. Get Global Element References ---
     const surveyDateInput = document.getElementById('surveyDate');
     const siteNameInput = document.getElementById('siteName');
-    const projectDataListElement = document.getElementById('projectDataList'); // Added
-    const buildingNameInput = document.getElementById('buildingName');
+    const projectDataListElement = document.getElementById('projectDataList'); 
+    const buildingSelectPresetElement = document.getElementById('buildingSelectPreset'); // Changed from buildingNameInput
     const addBuildingBtn = document.getElementById('addBuildingBtn');
     const buildingSelectElement = document.getElementById('buildingSelect');
     const activeProjectNameSpanElement = document.getElementById('activeProjectName');
@@ -1133,11 +1125,12 @@ async function initializeApp() {
     if (editDeteriorationNameInput && editSuggestionsContainer) setupPredictionListeners(editDeteriorationNameInput, editSuggestionsContainer, generateDeteriorationPredictions, 'editPhotoNumberInput'); // ★ 修正
     // Basic Info (Site name input handled by setupSelectionListeners)
     setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, surveyDateInput);
-    // Add Project/Building (Needs adjustment)
+    // Add Project/Building (Pass the new select element)
     if (addBuildingBtn) { 
         addBuildingBtn.addEventListener('click', () => handleAddProjectAndBuilding(
-            surveyDateInput, siteNameInput, buildingNameInput, 
-            projectDataListElement, // Pass datalist
+            surveyDateInput, siteNameInput, 
+            buildingSelectPresetElement, // Pass the new select element
+            projectDataListElement, 
             buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, 
             nextIdDisplayElement, deteriorationTableBodyElement, 
             editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, 
