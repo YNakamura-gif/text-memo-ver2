@@ -893,6 +893,41 @@ function setupSelectionListeners(siteNameInput, projectDataListElement, building
 }
 
 // ======================================================================
+// 20. Basic Info Saving (Separate Function)
+// ======================================================================
+function saveBasicInfo(siteNameInput) {
+  const siteName = siteNameInput.value.trim();
+  const projectId = generateProjectId(siteName);
+
+  if (projectId) { 
+    const infoRef = getProjectInfoRef(projectId);
+    infoRef.once('value').then(snapshot => {
+      if (snapshot.exists()) {
+        const currentSiteName = snapshot.val().siteName;
+        if (siteName && siteName !== currentSiteName) {
+             infoRef.update({ siteName: siteName })
+             .then(() => console.log(`[saveBasicInfo] Site name updated for ${projectId}`))
+             .catch(error => console.error("Error updating site name:", error));
+        }
+      } else {
+          console.log(`[saveBasicInfo] Project info for ${projectId} does not exist. No data saved.`);
+      }
+    }).catch(error => {
+        console.error("Error checking project info before saving:", error);
+    });
+
+  }
+}
+
+// ★ 再追加: setupBasicInfoListeners 関数
+function setupBasicInfoListeners(siteNameInput) {
+    const saveSiteNameHandler = () => saveBasicInfo(siteNameInput);
+    // Save on blur (when focus leaves the input)
+    siteNameInput.addEventListener('blur', saveSiteNameHandler);
+    console.log("[setupBasicInfoListeners] Listener for siteNameInput attached.");
+}
+
+// ======================================================================
 // 18. Initialization (Modified)
 // ======================================================================
 async function initializeApp() {
