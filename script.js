@@ -629,6 +629,43 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
   console.log(`[updateBuildingSelectorForProject] Attached new building listener for project ${projectId}`);
 }
 
+// ★ 移動: setupDeteriorationListener 関数定義をここに移動
+function setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  // Detach previous listener for this specific building if it exists
+  const listenerKey = `${projectId}_${buildingId}`;
+  if (deteriorationListeners[listenerKey]) {
+    console.log(`[setupDeteriorationListener] Detaching existing listener for ${listenerKey}`);
+    deteriorationListeners[listenerKey].ref.off('value', deteriorationListeners[listenerKey].callback);
+    delete deteriorationListeners[listenerKey];
+  }
+
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+
+  // Define the callback for the listener
+  const listenerCallback = (snapshot) => {
+    console.log(`[Deterioration Listener] Data received for ${listenerKey}`);
+    const data = snapshot.val() || {};
+    deteriorationData[buildingId] = data; // Update local cache
+    const records = Object.entries(data).map(([id, deterioration]) => ({
+      id,
+      ...deterioration
+    })).sort((a, b) => a.number - b.number); // Sort by number
+
+    renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+  };
+
+  // Attach the new listener and store it
+  deteriorationRef.on('value', listenerCallback, (error) => {
+    console.error(`Error attaching deterioration listener for ${listenerKey}:`, error);
+    // Optionally render an error state in the table
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput); // Clear table or show error
+    deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">データの読み込みに失敗しました。</td></tr>';
+  });
+
+  deteriorationListeners[listenerKey] = { ref: deteriorationRef, callback: listenerCallback };
+  console.log(`[setupDeteriorationListener] Attached new listener for ${listenerKey}`);
+}
+
 async function fetchAndRenderDeteriorations(projectId, buildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   if (!projectId || !buildingId) {
     console.log("[fetchAndRenderDeteriorations] Missing projectId or buildingId.");
@@ -1102,4 +1139,361 @@ async function initializeApp() {
 }
 
 // Run initialization when the DOM is ready
-document.addEventListener('DOMContentLoaded', initializeApp); 
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// ======================================================================
+// 10. Event Handler - Add Project/Building
+// ======================================================================
+async function handleAddProjectAndBuilding(siteNameInput, buildingSelectPresetElement, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) { 
+  console.log("[handleAddProjectAndBuilding] Triggered.");
+  const siteName = siteNameInput.value.trim();
+  const buildingName = buildingSelectPresetElement.value; // Use select value
+
+  if (!siteName || !buildingName) {
+    alert("すべて選択してください。"); 
+    return;
+  }
+
+  const projectId = generateProjectId(siteName);
+  const buildingId = generateBuildingId(buildingName);
+
+  if (!projectId || !buildingId) {
+    alert("現場名または建物名が無効です。");
+    return;
+  }
+
+  console.log(`[handleAddProjectAndBuilding] Project ID: ${projectId}, Building ID: ${buildingId}`);
+
+  currentProjectId = projectId;
+  currentBuildingId = buildingId;
+  lastUsedBuilding = buildingId;
+  localStorage.setItem('lastProjectId', currentProjectId);
+  localStorage.setItem('lastBuildingId', currentBuildingId);
+
+  const projectInfoRef = getProjectInfoRef(projectId);
+  const buildingRef = getBuildingsRef(projectId).child(buildingId);
+
+  try {
+    // Check if project info exists, if not, set it
+    const projectInfoSnapshot = await projectInfoRef.once('value');
+    if (!projectInfoSnapshot.exists()) {
+      await projectInfoRef.set({
+        siteName: siteName,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      console.log("[handleAddProjectAndBuilding] Project info saved.");
+      // Reload datalist after adding a new project
+      const updatedProjectNames = await populateProjectDataList(projectDataListElement); // ★ Fetch updated list
+      updateDatalistWithOptions(updatedProjectNames, projectDataListElement); // ★ Update datalist UI
+    } else {
+        console.log("[handleAddProjectAndBuilding] Project info already exists.");
+    }
+
+    // Check if building exists, if not, set it
+    const buildingSnapshot = await buildingRef.once('value');
+    if (!buildingSnapshot.exists()) {
+      await buildingRef.set({
+        name: buildingName,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      console.log("[handleAddProjectAndBuilding] Building saved.");
+      // Reload building selector as a new building was added
+      await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+    } else {
+      console.log("[handleAddProjectAndBuilding] Building already exists.");
+       // Ensure the selector is updated even if building exists (in case it wasn't loaded before)
+      await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+    }
+
+    // Ensure the newly added/selected building is selected in the dropdown
+    // Wait briefly for the selector update to potentially complete
+    await new Promise(resolve => setTimeout(resolve, 100)); 
+    if (buildingSelectElement.querySelector(`option[value="${buildingId}"]`)) {
+        buildingSelectElement.value = buildingId;
+        console.log(`[handleAddProjectAndBuilding] Set buildingSelectElement value to: ${buildingId}`);
+    } else {
+        console.warn(`[handleAddProjectAndBuilding] Newly added/selected building ID ${buildingId} not found in selector options after update.`);
+    }
+    
+    // Update UI displays
+    activeProjectNameSpanElement.textContent = siteName;
+    activeBuildingNameSpanElement.textContent = buildingName;
+    buildingSelectElement.disabled = false;
+
+    // Switch to detail tab
+    switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
+
+    // Fetch deteriorations for the newly selected/added building
+    await fetchAndRenderDeteriorations(projectId, buildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+
+  } catch (error) {
+    console.error("Error adding project/building:", error);
+    alert("情報の保存中にエラーが発生しました: " + error.message);
+  }
+}
+
+// ★ 再追加: handleBuildingSelectChange 関数
+async function handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  const selectedBuildingId = buildingSelectElement.value;
+  console.log(`[Building Select Change] Selected Building ID: ${selectedBuildingId}`);
+  if (!currentProjectId || !selectedBuildingId) {
+    console.log("[Building Select Change] No current project or selected building ID.");
+    activeBuildingNameSpanElement.textContent = '未選択';
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput); // Clear table
+    updateNextIdDisplay(currentProjectId, null, nextIdDisplayElement); // Clear next ID display
+    return;
+  }
+
+  currentBuildingId = selectedBuildingId;
+  lastUsedBuilding = currentBuildingId;
+  localStorage.setItem('lastBuildingId', currentBuildingId);
+
+  // Update active building name display
+  activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
+
+  // Fetch and render deteriorations for the selected building
+  await fetchAndRenderDeteriorations(currentProjectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+}
+
+// ======================================================================
+// 11. Event Handlers - Deterioration Form
+// ======================================================================
+
+// ★ 再追加: handleDeteriorationSubmit 関数
+function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement) {
+  event.preventDefault();
+  const location = locationInput.value.trim();
+  const deteriorationName = deteriorationNameInput.value.trim();
+  const photoNumber = photoNumberInput.value.trim();
+
+  if (!location || !deteriorationName || !photoNumber) {
+    alert("すべてのフィールドを入力してください。");
+    return;
+  }
+
+  const projectId = generateProjectId(location);
+  const buildingId = generateBuildingId(deteriorationName);
+
+  if (!projectId || !buildingId) {
+    alert("現場名または劣化項目名が無効です。");
+    return;
+  }
+
+  console.log(`[handleDeteriorationSubmit] Submitting new deterioration for project ID: ${projectId}, building ID: ${buildingId}`);
+
+  const deteriorationData = {
+    location: location,
+    name: deteriorationName,
+    photoNumber: photoNumber,
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+  deteriorationRef.push(deteriorationData)
+    .then(() => {
+      console.log("[handleDeteriorationSubmit] New deterioration submitted successfully.");
+      hidePredictions(locationPredictionsElement);
+      locationInput.value = '';
+      deteriorationNameInput.value = '';
+      photoNumberInput.value = '';
+      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+    })
+    .catch(error => {
+      console.error("[handleDeteriorationSubmit] Error submitting new deterioration:", error);
+      alert("情報の保存中にエラーが発生しました: " + error.message);
+    });
+}
+
+// ★ 再追加: handleContinuousAdd 関数
+function handleContinuousAdd(photoNumberInput, nextIdDisplayElement) {
+  const photoNumber = photoNumberInput.value.trim();
+
+  if (!photoNumber) {
+    alert("写真番号を入力してください。");
+    return;
+  }
+
+  const projectId = generateProjectId(locationInput.value.trim());
+  const buildingId = generateBuildingId(deteriorationNameInput.value.trim());
+
+  if (!projectId || !buildingId) {
+    alert("現場名または劣化項目名が無効です。");
+    return;
+  }
+
+  console.log(`[handleContinuousAdd] Submitting continuous addition for project ID: ${projectId}, building ID: ${buildingId}`);
+
+  const deteriorationData = {
+    location: locationInput.value.trim(),
+    name: deteriorationNameInput.value.trim(),
+    photoNumber: photoNumber,
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+  deteriorationRef.push(deteriorationData)
+    .then(() => {
+      console.log("[handleContinuousAdd] New continuous addition submitted successfully.");
+      hidePredictions(locationPredictionsElement);
+      locationInput.value = '';
+      deteriorationNameInput.value = '';
+      photoNumberInput.value = '';
+      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+    })
+    .catch(error => {
+      console.error("[handleContinuousAdd] Error submitting continuous addition:", error);
+      alert("情報の保存中にエラーが発生しました: " + error.message);
+    });
+}
+
+// ★ 再追加: handleEditClick 関数
+function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  console.log(`[handleEditClick] Editing record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
+  currentEditRecordId = recordId;
+  editModalElement.classList.remove('hidden');
+  editIdDisplay.textContent = recordId;
+  editLocationInput.value = locationInput.value;
+  editDeteriorationNameInput.value = deteriorationNameInput.value;
+  editPhotoNumberInput.value = photoNumberInput.value;
+}
+
+// ★ 再追加: handleDeleteClick 関数
+function handleDeleteClick(projectId, buildingId, recordId, recordNumber) {
+  console.log(`[handleDeleteClick] Deleting record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
+  const confirmation = confirm(`レコード ${recordNumber} を削除してもよろしいですか？`);
+  if (confirmation) {
+    const deteriorationRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
+    deteriorationRef.remove()
+      .then(() => {
+        console.log(`[handleDeleteClick] Record ${recordId} deleted successfully.`);
+        hidePredictions(locationPredictionsElement);
+        locationInput.value = '';
+        deteriorationNameInput.value = '';
+        photoNumberInput.value = '';
+        updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+      })
+      .catch(error => {
+        console.error("[handleDeleteClick] Error deleting record:", error);
+        alert("レコードの削除中にエラーが発生しました: " + error.message);
+      });
+  }
+}
+
+// ★ 再追加: handleEditSubmit 関数
+function handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, editModalElement) {
+  event.preventDefault();
+  const recordId = editIdDisplay.textContent;
+  const location = editLocationInput.value.trim();
+  const deteriorationName = editDeteriorationNameInput.value.trim();
+  const photoNumber = editPhotoNumberInput.value.trim();
+
+  if (!location || !deteriorationName || !photoNumber) {
+    alert("すべてのフィールドを入力してください。");
+    return;
+  }
+
+  const projectId = generateProjectId(location);
+  const buildingId = generateBuildingId(deteriorationName);
+
+  if (!projectId || !buildingId) {
+    alert("現場名または劣化項目名が無効です。");
+    return;
+  }
+
+  console.log(`[handleEditSubmit] Submitting edited record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
+
+  const deteriorationData = {
+    location: location,
+    name: deteriorationName,
+    photoNumber: photoNumber,
+    createdAt: firebase.database.ServerValue.TIMESTAMP
+  };
+
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
+  deteriorationRef.update(deteriorationData)
+    .then(() => {
+      console.log("[handleEditSubmit] Edited record updated successfully.");
+      hidePredictions(locationPredictionsElement);
+      editModalElement.classList.add('hidden');
+      locationInput.value = '';
+      deteriorationNameInput.value = '';
+      photoNumberInput.value = '';
+      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+    })
+    .catch(error => {
+      console.error("[handleEditSubmit] Error updating edited record:", error);
+      alert("情報の保存中にエラーが発生しました: " + error.message);
+    });
+}
+
+// ★ 再追加: handleExportCsv 関数
+function handleExportCsv(siteNameInput, buildingSelectElement) {
+  const siteName = siteNameInput.value.trim();
+  const buildingName = buildingSelectElement.value;
+
+  if (!siteName || !buildingName) {
+    alert("すべてのフィールドを入力してください。");
+    return;
+  }
+
+  const projectId = generateProjectId(siteName);
+  const buildingId = generateBuildingId(buildingName);
+
+  if (!projectId || !buildingId) {
+    alert("現場名または建物名が無効です。");
+    return;
+  }
+
+  console.log(`[handleExportCsv] Exporting CSV for project ID: ${projectId}, building ID: ${buildingId}`);
+
+  // Fetch deteriorations for the selected project and building
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+  let deteriorations = [];
+
+  deteriorationRef.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+      deteriorations = Object.entries(data).map(([id, deterioration]) => ({
+        id,
+        ...deterioration
+      }));
+    }
+  });
+
+  // Convert deteriorations to CSV format
+  const csvData = deteriorations.map(deterioration => [
+    deterioration.location,
+    deterioration.name,
+    deterioration.photoNumber
+  ]).join('\n');
+
+  // Create a Blob with the CSV data
+  const blob = new Blob([csvData], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+
+  // Create a temporary anchor element to trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${projectId}_${buildingId}_deteriorations.csv`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+
+  // Trigger download
+  a.click();
+
+  // Clean up
+  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// ======================================================================
+// 19. Listener Cleanup
+// ======================================================================
+function detachAllDeteriorationListeners() {
+  console.log("[detachAllDeteriorationListeners] Detaching all listeners...");
+  Object.entries(deteriorationListeners).forEach(([key, listener]) => {
+    console.log(`[detachAllDeteriorationListeners] Detaching listener for ${key}`);
+    listener.ref.off('value', listener.callback);
+  });
+  deteriorationListeners = {}; // Clear the listeners object
+} 
