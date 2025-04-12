@@ -1107,10 +1107,6 @@ async function initializeApp() {
     // Tab switching
     infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
     detailTabBtn.addEventListener('click', () => {
-        if (!currentProjectId || !currentBuildingId) {
-            alert('先に「基本情報」タブで現場と建物を選択または追加してください。');
-            return;
-        }
         switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
     });
 
