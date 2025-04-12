@@ -789,8 +789,19 @@ async function handleDeteriorationSubmit(event, locationInput, deteriorationName
   }
   const location = locationInput.value.trim();
   const name = deteriorationNameInput.value.trim();
-  const photoNumber = photoNumberInput.value.trim();
+  let photoNumber = photoNumberInput.value.trim();
   if (!location || !name) { alert("場所と劣化名を入力してください。"); return; }
+
+  // ★★★ 写真番号のバリデーションと半角変換 ★★★
+  if (photoNumber) { // 入力がある場合のみ処理
+    photoNumber = zenkakuToHankaku(photoNumber);
+    if (!/^[0-9]*$/.test(photoNumber)) {
+      console.log("[Validation] Photo number contains non-numeric characters. Submission prevented.");
+      return; // 数字以外が含まれていたら中断
+    }
+  }
+  // ★★★ ここまで ★★★
+
   const nextNumber = await getNextDeteriorationNumber(currentProjectId, currentBuildingId);
   if (nextNumber === null) { alert("劣化番号の取得に失敗しました。もう一度試してください。"); return; }
   const newData = { number: nextNumber, location, name, photoNumber: photoNumber || '' };
@@ -828,11 +839,23 @@ async function handleEditSubmit(event, editIdDisplay, editLocationInput, editDet
   if (!currentProjectId || !currentBuildingId || !currentEditRecordId) {
     alert("編集対象の情報が正しくありません。"); return;
   }
+  
+  let photoNumberValue = editPhotoNumberInput.value.trim();
+  // ★★★ 写真番号のバリデーションと半角変換 ★★★
+  if (photoNumberValue) { // 入力がある場合のみ処理
+    photoNumberValue = zenkakuToHankaku(photoNumberValue);
+    if (!/^[0-9]*$/.test(photoNumberValue)) {
+      console.log("[Validation] Photo number contains non-numeric characters. Edit submission prevented.");
+      return; // 数字以外が含まれていたら中断
+    }
+  }
+  // ★★★ ここまで ★★★
+  
   const updatedData = {
     number: parseInt(editIdDisplay.textContent, 10), 
     location: editLocationInput.value.trim(),
     name: editDeteriorationNameInput.value.trim(),
-    photoNumber: editPhotoNumberInput.value.trim()
+    photoNumber: photoNumberValue // バリデーション済みの値を使用
   };
   if (!updatedData.location || !updatedData.name) { alert("場所と劣化名は必須です。"); return; }
   try {
@@ -870,7 +893,18 @@ function recordLastAddedData(location, name) {
 async function handleContinuousAdd(photoNumberInput, nextIdDisplayElement) {
   if (!currentProjectId || !currentBuildingId) { alert("プロジェクトまたは建物が選択されていません。"); return; }
   if (!lastAddedLocation || !lastAddedName) { alert("連続登録する元データがありません。一度通常登録を行ってください。"); return; }
-  const photoNumber = photoNumberInput.value.trim();
+  let photoNumber = photoNumberInput.value.trim();
+
+  // ★★★ 写真番号のバリデーションと半角変換 ★★★
+  if (photoNumber) { // 入力がある場合のみ処理
+    photoNumber = zenkakuToHankaku(photoNumber);
+    if (!/^[0-9]*$/.test(photoNumber)) {
+      console.log("[Validation] Photo number contains non-numeric characters. Continuous add prevented.");
+      return; // 数字以外が含まれていたら中断
+    }
+  }
+  // ★★★ ここまで ★★★
+
   const nextNumber = await getNextDeteriorationNumber(currentProjectId, currentBuildingId);
   if (nextNumber === null) { alert("劣化番号の取得に失敗しました。もう一度試してください。"); return; }
   const newData = { number: nextNumber, location: lastAddedLocation, name: lastAddedName, photoNumber: photoNumber || '' };
