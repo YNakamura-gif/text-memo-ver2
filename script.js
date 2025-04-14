@@ -1594,42 +1594,83 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
 
   // Fetch deteriorations for the selected project and building
   const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
-  let deteriorations = [];
-
-  deteriorationRef.on('value', (snapshot) => {
+  // ★ Fetch data using once() instead of on() for export
+  deteriorationRef.once('value', (snapshot) => {
     const data = snapshot.val();
+    let deteriorations = [];
     if (data) {
       deteriorations = Object.entries(data).map(([id, deterioration]) => ({
         id,
         ...deterioration
       }));
+    } else {
+        console.log("[handleExportCsv] No data found to export.");
+        alert("エクスポートするデータがありません。");
+        return; // Exit if no data
     }
+
+    // ★ Define CSV Header
+    const csvHeader = ['場所', '劣化名', '写真番号', '登録日'];
+
+    // ★ Convert deteriorations to CSV format including formatted createdAt
+    const csvRows = deteriorations.map(deterioration => {
+        // Format timestamp (handle potential undefined createdAt)
+        let formattedDate = '';
+        if (deterioration.createdAt) {
+            const date = new Date(deterioration.createdAt);
+            // Pad single digit month/day/hour/minute/second with zero
+            const pad = (num) => num.toString().padStart(2, '0');
+            formattedDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        // Escape comma, double quotes, and newline within fields
+        const escapeCsvField = (field) => {
+            const stringField = String(field == null ? '' : field); // Handle null/undefined
+            // If field contains comma, newline, or double quote, enclose in double quotes
+            if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
+                // Escape existing double quotes by doubling them
+                return `"${stringField.replace(/"/g, '""')}"`;
+            }
+            return stringField;
+        };
+
+        return [
+            escapeCsvField(deterioration.location),
+            escapeCsvField(deterioration.name),
+            escapeCsvField(deterioration.photoNumber),
+            escapeCsvField(formattedDate) // Add formatted date
+        ].join(','); // Join fields with comma
+    });
+
+    // ★ Combine header and rows
+    const csvContent = [
+        csvHeader.join(','), // Join header fields with comma
+        ...csvRows
+    ].join('\n'); // Join header and rows with newline
+
+    // ★ Create a Blob with UTF-8 BOM and correct MIME type
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    // Create a temporary anchor element to trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectId}_${buildingId}_deteriorations.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+
+    // Trigger download
+    a.click();
+
+    // Clean up
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    console.log("[handleExportCsv] CSV export initiated.");
+
+  }, (error) => {
+    console.error("[handleExportCsv] Error fetching data for export:", error);
+    alert("CSVエクスポート用データの取得中にエラーが発生しました: " + error.message);
   });
-
-  // Convert deteriorations to CSV format
-  const csvData = deteriorations.map(deterioration => [
-    deterioration.location,
-    deterioration.name,
-    deterioration.photoNumber
-  ]).join('\n');
-
-  // Create a Blob with the CSV data
-  const blob = new Blob([csvData], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-
-  // Create a temporary anchor element to trigger download
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${projectId}_${buildingId}_deteriorations.csv`;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-
-  // Trigger download
-  a.click();
-
-  // Clean up
-  URL.revokeObjectURL(url);
-  document.body.removeChild(a);
 }
 
 // ======================================================================
