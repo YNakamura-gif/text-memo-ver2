@@ -1610,7 +1610,7 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
     }
 
     // ★ Define CSV Header
-    const csvHeader = ['場所', '劣化名', '写真番号', '登録日'];
+    const csvHeader = ['番号', '場所', '劣化名', '写真番号', '登録日']; // ★ 追加: 番号
 
     // ★ Convert deteriorations to CSV format including formatted createdAt
     const csvRows = deteriorations.map(deterioration => {
@@ -1635,6 +1635,7 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
         };
 
         return [
+            escapeCsvField(deterioration.counter), // ★ 追加: counterフィールド
             escapeCsvField(deterioration.location),
             escapeCsvField(deterioration.name),
             escapeCsvField(deterioration.photoNumber),
