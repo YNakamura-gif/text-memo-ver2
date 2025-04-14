@@ -716,7 +716,7 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
     const records = Object.entries(data).map(([id, deterioration]) => ({
       id,
       ...deterioration
-    })).sort((a, b) => a.number - b.number); // Sort by number
+    })).sort((a, b) => b.number - a.number); // ★ 修正: 降順ソート (b - a)
 
     renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
   };
