@@ -1496,7 +1496,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
 // ★ 修正: 編集対象データをFirebaseから取得して表示するように変更
 async function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   console.log(`[handleEditClick] Editing record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
-  currentEditRecordId = recordId;
+  currentEditRecordId = recordId; // Keep track of the actual Firebase record ID
 
   // Firebaseから編集対象のデータを取得
   const recordRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
@@ -1506,7 +1506,7 @@ async function handleEditClick(projectId, buildingId, recordId, editModalElement
 
     if (recordData) {
       // データをモーダルに設定
-      editIdDisplay.textContent = recordId; // IDはそのまま表示
+      editIdDisplay.textContent = recordData.number || ''; // ★ 修正: recordData.number を表示
       editLocationInput.value = recordData.location || '';
       editDeteriorationNameInput.value = recordData.name || '';
       editPhotoNumberInput.value = recordData.photoNumber || '';
@@ -1548,43 +1548,55 @@ function handleDeleteClick(projectId, buildingId, recordId, recordNumber) {
 // ★ 再追加: handleEditSubmit 関数
 function handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, editModalElement) {
   event.preventDefault();
-  const recordId = editIdDisplay.textContent;
+  // ★ 修正: recordId は currentEditRecordId から取得 (表示されているのは number のため)
+  const recordId = currentEditRecordId;
   const location = editLocationInput.value.trim();
   const deteriorationName = editDeteriorationNameInput.value.trim();
   const photoNumber = editPhotoNumberInput.value.trim();
+
+  if (!recordId) {
+    alert("編集対象のレコードIDが見つかりません。");
+    return;
+  }
 
   if (!location || !deteriorationName || !photoNumber) {
     alert("すべてのフィールドを入力してください。");
     return;
   }
 
-  const projectId = generateProjectId(location);
-  const buildingId = generateBuildingId(deteriorationName);
+  // ★ 修正: projectId と buildingId は現在のものを利用
+  const projectId = currentProjectId;
+  const buildingId = currentBuildingId;
 
   if (!projectId || !buildingId) {
-    alert("現場名または劣化項目名が無効です。");
+    alert("現在の現場名または建物名が不明です。"); // より具体的なエラーメッセージ
     return;
   }
 
   console.log(`[handleEditSubmit] Submitting edited record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
 
-  const deteriorationData = {
+  // ★ 注意: createdAt は更新しないのが一般的。更新日時が必要なら updatedAt を追加する
+  const deteriorationUpdateData = {
     location: location,
     name: deteriorationName,
     photoNumber: photoNumber,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
+    // createdAt: firebase.database.ServerValue.TIMESTAMP // 通常、作成日時は更新しない
+    lastUpdatedAt: firebase.database.ServerValue.TIMESTAMP // 更新日時を追加する場合
   };
 
   const deteriorationRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
-  deteriorationRef.update(deteriorationData)
+  deteriorationRef.update(deteriorationUpdateData)
     .then(() => {
       console.log("[handleEditSubmit] Edited record updated successfully.");
-      hidePredictions(locationPredictionsElement);
+      // ★ 削除: hidePredictions の呼び出しを削除
+      // hidePredictions(locationPredictionsElement);
       editModalElement.classList.add('hidden');
-      locationInput.value = '';
-      deteriorationNameInput.value = '';
-      photoNumberInput.value = '';
-      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+      // ★ 削除: メインフォームのクリア処理は不要
+      // locationInput.value = '';
+      // deteriorationNameInput.value = '';
+      // photoNumberInput.value = '';
+      // ★ 削除: updateNextIdDisplay の呼び出しは不要（編集ではカウンターは変わらない）
+      // updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
     })
     .catch(error => {
       console.error("[handleEditSubmit] Error updating edited record:", error);
