@@ -94,6 +94,22 @@ function zenkakuToHankaku(str) {
   });
 }
 
+// ★ NEW: Enforce half-width digits only in an input field
+function enforceHalfWidthDigits(inputElement) {
+  if (!inputElement) return;
+  inputElement.addEventListener('input', () => {
+    let value = inputElement.value;
+    // Convert full-width numbers to half-width
+    value = zenkakuToHankaku(value);
+    // Remove non-digit characters
+    value = value.replace(/[^0-9]/g, '');
+    // Update the input field value only if it changed
+    if (inputElement.value !== value) {
+        inputElement.value = value;
+    }
+  });
+}
+
 // ======================================================================
 // 5. Data Loading/Parsing (CSV, Predictions)
 // ======================================================================
@@ -1220,6 +1236,10 @@ async function initializeApp() {
   // Finally, switch to the determined initial tab
   switchTab(initialTab, infoTabBtn, detailTabBtn, infoTab, detailTab);
 
+  // ★ 追加: 写真番号入力欄に半角数字強制リスナーを設定
+  enforceHalfWidthDigits(photoNumberInput);
+  enforceHalfWidthDigits(editPhotoNumberInput);
+
   console.log("App initialized.");
 }
 
@@ -1367,12 +1387,10 @@ function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput,
   const deteriorationName = deteriorationNameInput.value.trim();
   const photoNumber = photoNumberInput.value.trim();
   
-  // ★ 写真番号のバリデーションを追加
+  // ★ 修正: 写真番号のバリデーションを送信時にも行う
   if (!/^[0-9]*$/.test(photoNumber)) {
-    alert("写真番号は半角数字で入力してください。");
-    // 全角数字が含まれていたら半角に変換して再試行を促すか、ここで処理を中断する
-    // 例: photoNumberInput.value = zenkakuToHankaku(photoNumber); // 半角に変換
-    return; // ここでは処理を中断
+    alert("写真番号は半角数字のみで入力してください。");
+    return; // 処理を中断
   }
 
   if (!location || !deteriorationName || !photoNumber) {
@@ -1493,14 +1511,34 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
 }
 
 // ★ 再追加: handleEditClick 関数
-function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+// ★ 修正: 編集対象データをFirebaseから取得して表示するように変更
+async function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   console.log(`[handleEditClick] Editing record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
-  currentEditRecordId = recordId;
-  editModalElement.classList.remove('hidden');
-  editIdDisplay.textContent = recordId;
-  editLocationInput.value = locationInput.value;
-  editDeteriorationNameInput.value = deteriorationNameInput.value;
-  editPhotoNumberInput.value = photoNumberInput.value;
+  currentEditRecordId = recordId; // Keep track of the actual Firebase record ID
+
+  // Firebaseから編集対象のデータを取得
+  const recordRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
+  try {
+    const snapshot = await recordRef.once('value');
+    const recordData = snapshot.val();
+
+    if (recordData) {
+      // データをモーダルに設定
+      editIdDisplay.textContent = recordData.number || ''; // ★ 修正: recordData.number を表示
+      editLocationInput.value = recordData.location || '';
+      editDeteriorationNameInput.value = recordData.name || '';
+      editPhotoNumberInput.value = recordData.photoNumber || '';
+
+      // モーダルを表示
+      editModalElement.classList.remove('hidden');
+    } else {
+      console.error(`[handleEditClick] Record data not found for ID: ${recordId}`);
+      alert("編集対象のデータが見つかりませんでした。");
+    }
+  } catch (error) {
+    console.error("[handleEditClick] Error fetching record data:", error);
+    alert("編集データの取得中にエラーが発生しました: " + error.message);
+  }
 }
 
 // ★ 再追加: handleDeleteClick 関数
@@ -1528,43 +1566,61 @@ function handleDeleteClick(projectId, buildingId, recordId, recordNumber) {
 // ★ 再追加: handleEditSubmit 関数
 function handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, editModalElement) {
   event.preventDefault();
-  const recordId = editIdDisplay.textContent;
+  // ★ 修正: recordId は currentEditRecordId から取得 (表示されているのは number のため)
+  const recordId = currentEditRecordId;
   const location = editLocationInput.value.trim();
   const deteriorationName = editDeteriorationNameInput.value.trim();
   const photoNumber = editPhotoNumberInput.value.trim();
+
+  // ★ 追加: 写真番号の送信時バリデーション
+  if (!/^[0-9]*$/.test(photoNumber)) {
+    alert("写真番号は半角数字のみで入力してください。");
+    return; // 処理を中断
+  }
+
+  if (!recordId) {
+    alert("編集対象のレコードIDが見つかりません。");
+    return;
+  }
 
   if (!location || !deteriorationName || !photoNumber) {
     alert("すべてのフィールドを入力してください。");
     return;
   }
 
-  const projectId = generateProjectId(location);
-  const buildingId = generateBuildingId(deteriorationName);
+  // ★ 修正: projectId と buildingId は現在のものを利用
+  const projectId = currentProjectId;
+  const buildingId = currentBuildingId;
 
   if (!projectId || !buildingId) {
-    alert("現場名または劣化項目名が無効です。");
+    alert("現在の現場名または建物名が不明です。"); // より具体的なエラーメッセージ
     return;
   }
 
   console.log(`[handleEditSubmit] Submitting edited record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
 
-  const deteriorationData = {
+  // ★ 注意: createdAt は更新しないのが一般的。更新日時が必要なら updatedAt を追加する
+  const deteriorationUpdateData = {
     location: location,
     name: deteriorationName,
     photoNumber: photoNumber,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
+    // createdAt: firebase.database.ServerValue.TIMESTAMP // 通常、作成日時は更新しない
+    lastUpdatedAt: firebase.database.ServerValue.TIMESTAMP // 更新日時を追加する場合
   };
 
   const deteriorationRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
-  deteriorationRef.update(deteriorationData)
+  deteriorationRef.update(deteriorationUpdateData)
     .then(() => {
       console.log("[handleEditSubmit] Edited record updated successfully.");
-      hidePredictions(locationPredictionsElement);
+      // ★ 削除: hidePredictions の呼び出しを削除
+      // hidePredictions(locationPredictionsElement);
       editModalElement.classList.add('hidden');
-      locationInput.value = '';
-      deteriorationNameInput.value = '';
-      photoNumberInput.value = '';
-      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+      // ★ 削除: メインフォームのクリア処理は不要
+      // locationInput.value = '';
+      // deteriorationNameInput.value = '';
+      // photoNumberInput.value = '';
+      // ★ 削除: updateNextIdDisplay の呼び出しは不要（編集ではカウンターは変わらない）
+      // updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
     })
     .catch(error => {
       console.error("[handleEditSubmit] Error updating edited record:", error);

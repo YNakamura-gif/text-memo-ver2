@@ -99,4 +99,12 @@ textarea {
   overflow: hidden; /* はみ出しを隠す */
   text-overflow: ellipsis; /* 省略記号 (...) を表示 */
   white-space: nowrap; /* 折り返し禁止 */
+}
+
+/* 削除ボタンと操作ヘッダーを非表示にする */
+.delete-btn {
+  display: none;
+}
+thead th:last-child {
+  display: none;
 } 
