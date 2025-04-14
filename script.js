@@ -46,10 +46,14 @@ function getBuildingsRef(projectId) {
   return database.ref(`projects/${projectId}/buildings`);
 }
 function getDeteriorationsRef(projectId, buildingId) {
-  return database.ref(`projects/${projectId}/deteriorations/${buildingId}`);
+  return database.ref(`projects/${projectId}/buildings/${buildingId}/deteriorations`);
 }
 function getDeteriorationCounterRef(projectId, buildingId) {
   return database.ref(`projects/${projectId}/counters/${buildingId}`);
+}
+// ★ 追加: 写真番号カウンター用の参照
+function getPhotoCounterRef(projectId, buildingId) {
+    return database.ref(`projects/${projectId}/photoCounters/${buildingId}`);
 }
 
 // ======================================================================
@@ -950,6 +954,42 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
   return nextNumber;
 }
 
+// ★ 追加: 写真番号を安全に採番する関数 (トランザクション使用)
+async function getNextPhotoNumber(projectId, buildingId) {
+    if (!projectId || !buildingId) {
+        console.warn("[getNextPhotoNumber] Missing projectId or buildingId.");
+        return 1; // デフォルト値 (適切な初期値を検討)
+    }
+    const counterRef = getPhotoCounterRef(projectId, buildingId);
+    let nextPhotoNumber = 1;
+    try {
+        const result = await counterRef.transaction(currentCounter => {
+            // カウンターが存在しない場合は1から開始、存在する場合はインクリメント
+            return (currentCounter || 0) + 1;
+        });
+
+        if (result.committed && result.snapshot.exists()) {
+            nextPhotoNumber = result.snapshot.val();
+            console.log(`[getNextPhotoNumber] Successfully obtained next photo number: ${nextPhotoNumber} for ${projectId}/${buildingId}`);
+        } else {
+            console.warn("[getNextPhotoNumber] Transaction not committed or snapshot doesn't exist. Reading directly as fallback.");
+            const fallbackSnapshot = await counterRef.once('value');
+            nextPhotoNumber = (fallbackSnapshot.val() || 0) + 1;
+        }
+    } catch (error) {
+        console.error("[getNextPhotoNumber] Error in transaction:", error);
+        // フォールバック: 現在の値を読み取ってインクリメント (競合の可能性あり)
+        try {
+            const snapshot = await counterRef.once('value');
+            nextPhotoNumber = (snapshot.val() || 0) + 1;
+        } catch (readError) {
+            console.error("[getNextPhotoNumber] Fallback read also failed:", readError);
+            nextPhotoNumber = 1; // 最終フォールバック
+        }
+    }
+    return nextPhotoNumber;
+}
+
 // ======================================================================
 // 14. Event Listener Setup - Selection Changes (Site/Building) (Modified)
 // ======================================================================
@@ -1390,24 +1430,23 @@ function recordLastAddedData(location, name, photoNumber) {
 // ======================================================================
 
 // ★ 再追加: handleDeteriorationSubmit 関数 (引数に locationPredictionsElement を追加)
-function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement, locationPredictionsElement) {
+// ★ async に変更
+async function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement, locationPredictionsElement) { 
   event.preventDefault();
   const location = locationInput.value.trim();
   const deteriorationName = deteriorationNameInput.value.trim();
-  const photoNumber = photoNumberInput.value.trim();
+  const photoNumberInputStr = photoNumberInput.value.trim(); // ★ 変数名変更
   
-  // ★ 修正: 写真番号のバリデーションを送信時にも行う
-  if (!/^[0-9]*$/.test(photoNumber)) {
+  if (!/^[0-9]*$/.test(photoNumberInputStr)) {
     alert("写真番号は半角数字のみで入力してください。");
-    return; // 処理を中断
+    return; 
   }
 
-  if (!location || !deteriorationName || !photoNumber) {
+  if (!location || !deteriorationName || !photoNumberInputStr) {
     alert("すべてのフィールドを入力してください。");
     return;
   }
 
-  // ★ projectId と buildingId は現在の選択状態から取得する
   if (!currentProjectId || !currentBuildingId) {
     alert("現場名または建物名が選択されていません。");
     return;
@@ -1415,40 +1454,38 @@ function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput,
 
   console.log(`[handleDeteriorationSubmit] Submitting new deterioration for project ID: ${currentProjectId}, building ID: ${currentBuildingId}`);
 
-  // 次の番号を取得してデータに含める
-  getNextDeteriorationNumber(currentProjectId, currentBuildingId).then(nextNumber => {
+  try { // ★ try-catch ブロックを追加
+    // ★ 変更: 劣化番号と写真番号カウンター更新を並行して処理
+    const [nextNumber, photoNumberToUse] = await Promise.all([
+        getNextDeteriorationNumber(currentProjectId, currentBuildingId),
+        updatePhotoCounterIfNeeded(currentProjectId, currentBuildingId, photoNumberInputStr)
+    ]);
+
+    // ★ photoNumberToUse を使用 (updatePhotoCounterIfNeeded は現状ユーザー入力をそのまま返す設計)
     const deteriorationData = {
-      number: nextNumber, // ★ 取得した番号を追加
+      number: nextNumber, 
       location: location,
       name: deteriorationName,
-      photoNumber: photoNumber,
+      photoNumber: photoNumberToUse, // ★ 決定された写真番号を使用
       createdAt: firebase.database.ServerValue.TIMESTAMP
     };
 
     const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
-    deteriorationRef.push(deteriorationData)
-      .then(() => {
-        console.log("[handleDeteriorationSubmit] New deterioration submitted successfully.");
-        hidePredictions(locationPredictionsElement); // ★ ここで locationPredictionsElement を使用
-        // フォームをクリア
-        locationInput.value = '';
-        deteriorationNameInput.value = '';
-        photoNumberInput.value = '';
-        // 次の番号表示を更新 (カウンターは transaction でインクリメントされているはずなので再取得)
-        updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-        // 最後に登録したデータを記録 (写真番号も渡す)
-        recordLastAddedData(location, deteriorationName, photoNumber); // ★ 変更
-        // 場所入力にフォーカスを戻す
-        locationInput.focus();
-      })
-      .catch(error => {
-        console.error("[handleDeteriorationSubmit] Error submitting new deterioration:", error);
-        alert("情報の保存中にエラーが発生しました: " + error.message);
-      });
-  }).catch(error => {
-      console.error("[handleDeteriorationSubmit] Error getting next deterioration number:", error);
-      alert("次の劣化番号の取得中にエラーが発生しました: " + error.message);
-  });
+    await deteriorationRef.push(deteriorationData); // ★ await に変更
+
+    console.log("[handleDeteriorationSubmit] New deterioration submitted successfully.");
+    hidePredictions(locationPredictionsElement); 
+    locationInput.value = '';
+    deteriorationNameInput.value = '';
+    photoNumberInput.value = '';
+    updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
+    recordLastAddedData(location, deteriorationName, photoNumberToUse); // ★ 決定された写真番号を記録
+    locationInput.focus();
+
+  } catch (error) { // ★ catch ブロック
+      console.error("[handleDeteriorationSubmit] Error:", error);
+      alert("情報の保存中にエラーが発生しました: " + error.message);
+  }
 }
 
 // ★ 修正: handleContinuousAdd 関数 (写真番号を自動インクリメント)
@@ -1460,10 +1497,10 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
   //   return;
   // }
 
-  // 直前の場所・劣化名・写真番号を取得
+  // 直前の場所・劣化名を取得 (写真番号は使わない)
   const location = lastAddedLocation;
   const deteriorationName = lastAddedName;
-  const previousPhotoNumber = lastAddedPhotoNumber;
+  // const previousPhotoNumber = lastAddedPhotoNumber; // ★ 不要
 
   // 必要な情報が揃っているかチェック
   if (!currentProjectId || !currentBuildingId) {
@@ -1474,13 +1511,22 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
     alert("直前に登録された場所・劣化名がありません。一度通常登録を行ってください。");
     return;
   }
-  if (previousPhotoNumber === '' || isNaN(parseInt(previousPhotoNumber))) {
-    alert("直前に登録された有効な写真番号がありません。一度通常登録を行ってください。");
-    return;
-  }
+  // ★ previousPhotoNumber のチェックは不要になったため削除
+  // if (previousPhotoNumber === '' || isNaN(parseInt(previousPhotoNumber))) {
+  //   alert("直前に登録された有効な写真番号がありません。一度通常登録を行ってください。");
+  //   return;
+  // }
 
-  // 写真番号をインクリメント
-  const newPhotoNumber = parseInt(previousPhotoNumber) + 1;
+  // ★ 変更: Firebaseトランザクションで写真番号を安全に取得
+  let newPhotoNumber;
+  try {
+    newPhotoNumber = await getNextPhotoNumber(currentProjectId, currentBuildingId);
+  } catch (error) {
+      alert("次の写真番号の取得中にエラーが発生しました: " + error.message);
+      return;
+  }
+  
+  // const newPhotoNumber = parseInt(previousPhotoNumber) + 1; // ★ 削除: 古い採番ロジック
 
   console.log(`[handleContinuousAdd] Submitting continuous addition for project ID: ${currentProjectId}, building ID: ${currentBuildingId} using last data: Loc='${location}', Name='${deteriorationName}', NewPhoto='${newPhotoNumber}'`);
 
@@ -1492,7 +1538,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
       number: nextNumber, 
       location: location, 
       name: deteriorationName, 
-      photoNumber: newPhotoNumber.toString(), // ★ 新しい写真番号
+      photoNumber: newPhotoNumber.toString(), // ★ トランザクションで取得した写真番号
       createdAt: firebase.database.ServerValue.TIMESTAMP
     };
 
@@ -1503,7 +1549,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
     // ★ 削除: 不要なフォームクリア処理
     // photoNumberInput.value = ''; 
     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-    // ★ 記録: 連続登録でも最後に登録した情報を更新する
+    // ★ 記録: 連続登録でも最後に登録した情報を更新する (実際に保存された番号を使う)
     recordLastAddedData(location, deteriorationName, newPhotoNumber.toString()); 
     // ★ 変更: 場所入力にフォーカスを戻す
     locationInput.focus(); 
@@ -1749,4 +1795,42 @@ function detachAllDeteriorationListeners() {
     listener.ref.off('value', listener.callback);
   });
   deteriorationListeners = {}; // Clear the listeners object
-} 
+}
+
+// ★ 追加: 通常登録時に写真カウンターを必要に応じて更新する関数
+async function updatePhotoCounterIfNeeded(projectId, buildingId, userEnteredPhotoNumber) {
+    if (!projectId || !buildingId) {
+        console.warn("[updatePhotoCounterIfNeeded] Missing projectId or buildingId.");
+        return userEnteredPhotoNumber; // カウンター更新不可、入力値をそのまま返す
+    }
+    const numericPhotoNumber = parseInt(userEnteredPhotoNumber);
+    if (isNaN(numericPhotoNumber)) {
+        console.warn("[updatePhotoCounterIfNeeded] Invalid userEnteredPhotoNumber:", userEnteredPhotoNumber);
+        return userEnteredPhotoNumber; // 不正な入力値、そのまま返す
+    }
+
+    const counterRef = getPhotoCounterRef(projectId, buildingId);
+    try {
+        const result = await counterRef.transaction(currentCounter => {
+            const currentNumericCounter = parseInt(currentCounter || 0); // 現在のカウンター値 (数値)
+            // ユーザー入力値が現在のカウンターより大きい場合のみ、カウンターを更新
+            if (numericPhotoNumber > currentNumericCounter) {
+                return numericPhotoNumber; // カウンターをユーザー入力値で上書き
+            }
+            // そうでなければカウンターは変更しない (undefined を返すとトランザクションが中断される)
+            return currentCounter; 
+        });
+        
+        if (result.committed) {
+             console.log(`[updatePhotoCounterIfNeeded] Photo counter transaction committed. Final counter: ${result.snapshot.val()}`);
+        } else {
+             console.warn("[updatePhotoCounterIfNeeded] Photo counter transaction aborted. Counter may not be updated.");
+        }
+
+    } catch (error) {
+        console.error("[updatePhotoCounterIfNeeded] Error in transaction:", error);
+        // エラーが発生した場合も、ユーザーが入力した値をそのまま使う
+    }
+    // どの道、通常登録ではユーザーが入力した値を優先して返す
+    return userEnteredPhotoNumber;
+}
