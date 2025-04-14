@@ -94,6 +94,22 @@ function zenkakuToHankaku(str) {
   });
 }
 
+// ★ NEW: Enforce half-width digits only in an input field
+function enforceHalfWidthDigits(inputElement) {
+  if (!inputElement) return;
+  inputElement.addEventListener('input', () => {
+    let value = inputElement.value;
+    // Convert full-width numbers to half-width
+    value = zenkakuToHankaku(value);
+    // Remove non-digit characters
+    value = value.replace(/[^0-9]/g, '');
+    // Update the input field value only if it changed
+    if (inputElement.value !== value) {
+        inputElement.value = value;
+    }
+  });
+}
+
 // ======================================================================
 // 5. Data Loading/Parsing (CSV, Predictions)
 // ======================================================================
@@ -1220,6 +1236,10 @@ async function initializeApp() {
   // Finally, switch to the determined initial tab
   switchTab(initialTab, infoTabBtn, detailTabBtn, infoTab, detailTab);
 
+  // ★ 追加: 写真番号入力欄に半角数字強制リスナーを設定
+  enforceHalfWidthDigits(photoNumberInput);
+  enforceHalfWidthDigits(editPhotoNumberInput);
+
   console.log("App initialized.");
 }
 
@@ -1367,12 +1387,10 @@ function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput,
   const deteriorationName = deteriorationNameInput.value.trim();
   const photoNumber = photoNumberInput.value.trim();
   
-  // ★ 写真番号のバリデーションを追加
+  // ★ 修正: 写真番号のバリデーションを送信時にも行う
   if (!/^[0-9]*$/.test(photoNumber)) {
-    alert("写真番号は半角数字で入力してください。");
-    // 全角数字が含まれていたら半角に変換して再試行を促すか、ここで処理を中断する
-    // 例: photoNumberInput.value = zenkakuToHankaku(photoNumber); // 半角に変換
-    return; // ここでは処理を中断
+    alert("写真番号は半角数字のみで入力してください。");
+    return; // 処理を中断
   }
 
   if (!location || !deteriorationName || !photoNumber) {
@@ -1553,6 +1571,12 @@ function handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriora
   const location = editLocationInput.value.trim();
   const deteriorationName = editDeteriorationNameInput.value.trim();
   const photoNumber = editPhotoNumberInput.value.trim();
+
+  // ★ 追加: 写真番号の送信時バリデーション
+  if (!/^[0-9]*$/.test(photoNumber)) {
+    alert("写真番号は半角数字のみで入力してください。");
+    return; // 処理を中断
+  }
 
   if (!recordId) {
     alert("編集対象のレコードIDが見つかりません。");
