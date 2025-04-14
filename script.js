@@ -1635,7 +1635,7 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
         };
 
         return [
-            escapeCsvField(deterioration.counter), // ★ 追加: counterフィールド
+            escapeCsvField(deterioration.number), // ★ 修正: counter から number に変更
             escapeCsvField(deterioration.location),
             escapeCsvField(deterioration.name),
             escapeCsvField(deterioration.photoNumber),
