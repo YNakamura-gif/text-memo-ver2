@@ -30,6 +30,7 @@ let deteriorationListeners = {};
 let currentEditRecordId = null;
 let lastAddedLocation = '';
 let lastAddedName = '';
+let lastAddedPhotoNumber = ''; // ★ 追加: 連続登録用に直前の写真番号を記憶
 let buildingsListener = null; // Firebase listener for buildings
 
 // ======================================================================
@@ -1124,7 +1125,8 @@ async function initializeApp() {
 
   // Deterioration Form Submission
   deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, photoNumberInput, nextIdDisplayElement, locationPredictionsElement));
-  continuousAddBtn.addEventListener('click', () => handleContinuousAdd(photoNumberInput, nextIdDisplayElement));
+  // ★ 修正: handleContinuousAdd の呼び出し引数を変更
+  continuousAddBtn.addEventListener('click', () => handleContinuousAdd(nextIdDisplayElement, locationInput)); 
 
   // Input Predictions (Deterioration Form)
   setupPredictionListeners(locationInput, locationPredictionsElement, generateLocationPredictions, 'deteriorationNameInput');
@@ -1346,11 +1348,12 @@ async function handleBuildingSelectChange(buildingSelectElement, activeBuildingN
   await fetchAndRenderDeteriorations(currentProjectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
 }
 
-// ★ 再追加: recordLastAddedData 関数 (連続登録用)
-function recordLastAddedData(location, name) {
+// ★ 再追加: recordLastAddedData 関数 (連続登録用 - 写真番号も記憶)
+function recordLastAddedData(location, name, photoNumber) {
     lastAddedLocation = location;
     lastAddedName = name;
-    console.log(`[recordLastAddedData] Recorded last added: Location="${lastAddedLocation}", Name="${lastAddedName}"`);
+    lastAddedPhotoNumber = photoNumber; // ★ 追加
+    console.log(`[recordLastAddedData] Recorded last added: Location="${lastAddedLocation}", Name="${lastAddedName}", Photo="${lastAddedPhotoNumber}"`);
 }
 
 // ======================================================================
@@ -1406,8 +1409,8 @@ function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput,
         photoNumberInput.value = '';
         // 次の番号表示を更新 (カウンターは transaction でインクリメントされているはずなので再取得)
         updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-        // 最後に登録したデータを記録
-        recordLastAddedData(location, deteriorationName);
+        // 最後に登録したデータを記録 (写真番号も渡す)
+        recordLastAddedData(location, deteriorationName, photoNumber); // ★ 変更
         // 場所入力にフォーカスを戻す
         locationInput.focus();
       })
@@ -1421,46 +1424,72 @@ function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput,
   });
 }
 
-// ★ 再追加: handleContinuousAdd 関数
-function handleContinuousAdd(photoNumberInput, nextIdDisplayElement) {
-  const photoNumber = photoNumberInput.value.trim();
+// ★ 修正: handleContinuousAdd 関数 (写真番号を自動インクリメント)
+async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引数変更
+  // ★ 削除: photoNumberInput からの値取得・チェックを削除
+  // const photoNumber = photoNumberInput.value.trim();
+  // if (!photoNumber) {
+  //   alert("写真番号を入力してください。");
+  //   return;
+  // }
 
-  if (!photoNumber) {
-    alert("写真番号を入力してください。");
+  // 直前の場所・劣化名・写真番号を取得
+  const location = lastAddedLocation;
+  const deteriorationName = lastAddedName;
+  const previousPhotoNumber = lastAddedPhotoNumber;
+
+  // 必要な情報が揃っているかチェック
+  if (!currentProjectId || !currentBuildingId) {
+    alert("現場と建物が選択されていません。基本情報タブで選択してください。");
+    return;
+  }
+  if (!location || !deteriorationName) {
+    alert("直前に登録された場所・劣化名がありません。一度通常登録を行ってください。");
+    return;
+  }
+  if (previousPhotoNumber === '' || isNaN(parseInt(previousPhotoNumber))) {
+    alert("直前に登録された有効な写真番号がありません。一度通常登録を行ってください。");
     return;
   }
 
-  const projectId = generateProjectId(locationInput.value.trim());
-  const buildingId = generateBuildingId(deteriorationNameInput.value.trim());
+  // 写真番号をインクリメント
+  const newPhotoNumber = parseInt(previousPhotoNumber) + 1;
 
-  if (!projectId || !buildingId) {
-    alert("現場名または劣化項目名が無効です。");
-    return;
+  console.log(`[handleContinuousAdd] Submitting continuous addition for project ID: ${currentProjectId}, building ID: ${currentBuildingId} using last data: Loc='${location}', Name='${deteriorationName}', NewPhoto='${newPhotoNumber}'`);
+
+  try {
+    // 次の劣化番号を取得
+    const nextNumber = await getNextDeteriorationNumber(currentProjectId, currentBuildingId);
+    
+    const deteriorationData = {
+      number: nextNumber, 
+      location: location, 
+      name: deteriorationName, 
+      photoNumber: newPhotoNumber.toString(), // ★ 新しい写真番号
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+    await deteriorationRef.push(deteriorationData);
+
+    console.log("[handleContinuousAdd] New continuous addition submitted successfully.");
+    // ★ 削除: 不要なフォームクリア処理
+    // photoNumberInput.value = ''; 
+    updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
+    // ★ 記録: 連続登録でも最後に登録した情報を更新する
+    recordLastAddedData(location, deteriorationName, newPhotoNumber.toString()); 
+    // ★ 変更: 場所入力にフォーカスを戻す
+    locationInput.focus(); 
+
+  } catch (error) {
+    console.error("[handleContinuousAdd] Error:", error);
+    // エラーの種類に応じてメッセージを分けることも検討
+    if (error.message.includes("getNextDeteriorationNumber")) {
+         alert("次の劣化番号の取得中にエラーが発生しました: " + error.message);
+    } else {
+         alert("情報の保存中にエラーが発生しました: " + error.message);
+    }
   }
-
-  console.log(`[handleContinuousAdd] Submitting continuous addition for project ID: ${projectId}, building ID: ${buildingId}`);
-
-  const deteriorationData = {
-    location: locationInput.value.trim(),
-    name: deteriorationNameInput.value.trim(),
-    photoNumber: photoNumber,
-    createdAt: firebase.database.ServerValue.TIMESTAMP
-  };
-
-  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
-  deteriorationRef.push(deteriorationData)
-    .then(() => {
-      console.log("[handleContinuousAdd] New continuous addition submitted successfully.");
-      hidePredictions(locationPredictionsElement);
-      locationInput.value = '';
-      deteriorationNameInput.value = '';
-      photoNumberInput.value = '';
-      updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
-    })
-    .catch(error => {
-      console.error("[handleContinuousAdd] Error submitting continuous addition:", error);
-      alert("情報の保存中にエラーが発生しました: " + error.message);
-    });
 }
 
 // ★ 再追加: handleEditClick 関数
