@@ -339,48 +339,49 @@ function generateDegradationPredictions(inputText) {
 
   const searchTermLower = inputText.trim().toLowerCase();
   const searchTermHiragana = katakanaToHiragana(searchTermLower);
-  const isTwoCharInput = searchTermHiragana.length === 2; // ★ ひらがな変換後の長さで2文字判定
+  const isTwoCharInput = searchTermHiragana.length === 2;
   // console.log(`[generateDegradationPredictions] Search terms: lower='${searchTermLower}', hiragana='${searchTermHiragana}', isTwoChar=${isTwoCharInput}`);
 
-  const matchedItems = degradationItemsData.filter(item => {
+  // ★ 修正: 優先度別にマッチ結果を収集
+  let readingPrefixMatches = [];
+  let nameMatches = [];
+  let codeMatches = [];
+
+  degradationItemsData.forEach(item => {
     const itemNameLower = item.name?.toLowerCase() || '';
-    const itemReadingRaw = item.reading || ''; // Get the raw reading string
-    const itemCodeHiragana = katakanaToHiragana(item.code?.toLowerCase() || ''); // ★ 2文字コードもひらがな化
+    const itemReadingRaw = item.reading || ''; 
+    const itemCodeHiragana = katakanaToHiragana(item.code?.toLowerCase() || '');
 
-    // 1. Match against name (partial match)
-    const nameMatch = itemNameLower.includes(searchTermLower);
-
-    // 2. Match against any reading part (prefix match on Hiragana)
-    const readingParts = itemReadingRaw.split(' '); // Split readings by space
-    let readingMatch = false;
+    // 1. 読み仮名前方一致チェック
+    const readingParts = itemReadingRaw.split(' ');
+    let isReadingPrefixMatch = false;
     for (const part of readingParts) {
       const partHiragana = katakanaToHiragana(part.toLowerCase());
       if (partHiragana.startsWith(searchTermHiragana)) {
-        readingMatch = true;
-        break; // Found a match in readings, no need to check further parts
+        isReadingPrefixMatch = true;
+        break;
       }
     }
-
-    // 3. Match against 2-character code (exact match if input is 2 chars)
-    let codeMatch = false;
-    if (isTwoCharInput && itemCodeHiragana && itemCodeHiragana === searchTermHiragana) {
-        // console.log(`[generateDegradationPredictions] Code match found: input='${searchTermHiragana}', itemCode='${itemCodeHiragana}' for item: ${item.name}`);
-        codeMatch = true;
+    if (isReadingPrefixMatch) {
+      readingPrefixMatches.push(item.name);
     }
 
-    // Return true if any match
-    return nameMatch || readingMatch || codeMatch;
+    // 2. 劣化名部分一致チェック (読み仮名と重複しないように)
+    if (!isReadingPrefixMatch && itemNameLower.includes(searchTermLower)) {
+      nameMatches.push(item.name);
+    }
+
+    // 3. 2文字コード完全一致チェック (読み仮名・名前とも重複しないように)
+    if (!isReadingPrefixMatch && !itemNameLower.includes(searchTermLower) && 
+        isTwoCharInput && itemCodeHiragana && itemCodeHiragana === searchTermHiragana) {
+      codeMatches.push(item.name);
+    }
   });
 
-  // Map to prediction string (Name ONLY) - ★ 表示を修正
-  const predictions = matchedItems.map(item => {
-    return item.name; // item.code を表示しない
-  });
+  // ★ 修正: 優先度順に結合し、重複を除去して最大10件返す
+  const combined = [...readingPrefixMatches, ...nameMatches, ...codeMatches];
+  const uniquePredictions = [...new Set(combined)];
 
-  // console.log(`[generateDegradationPredictions] Found ${predictions.length} raw predictions:`, predictions);
-
-  // Return unique predictions, limited to 10
-  const uniquePredictions = [...new Set(predictions)];
   // console.log(`[generateDegradationPredictions] Returning ${uniquePredictions.length} unique predictions:`, uniquePredictions.slice(0, 10));
   return uniquePredictions.slice(0, 10);
 }
