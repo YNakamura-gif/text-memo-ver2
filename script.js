@@ -335,16 +335,18 @@ function generateDegradationPredictions(inputText) {
 
   const searchTermLower = inputText.trim().toLowerCase();
   const searchTermHiragana = katakanaToHiragana(searchTermLower);
-  // console.log(`[generateDegradationPredictions] Search term Hiragana: \"${searchTermHiragana}\"`);
+  const isTwoCharInput = searchTermHiragana.length === 2; // ★ ひらがな変換後の長さで2文字判定
+  // console.log(`[generateDegradationPredictions] Search terms: lower='${searchTermLower}', hiragana='${searchTermHiragana}', isTwoChar=${isTwoCharInput}`);
 
   const matchedItems = degradationItemsData.filter(item => {
     const itemNameLower = item.name?.toLowerCase() || '';
     const itemReadingRaw = item.reading || ''; // Get the raw reading string
+    const itemCodeHiragana = katakanaToHiragana(item.code?.toLowerCase() || ''); // ★ 2文字コードもひらがな化
 
-    // Match against name (partial match)
+    // 1. Match against name (partial match)
     const nameMatch = itemNameLower.includes(searchTermLower);
 
-    // ★ 修正: Match against any reading part (prefix match on Hiragana)
+    // 2. Match against any reading part (prefix match on Hiragana)
     const readingParts = itemReadingRaw.split(' '); // Split readings by space
     let readingMatch = false;
     for (const part of readingParts) {
@@ -355,19 +357,28 @@ function generateDegradationPredictions(inputText) {
       }
     }
 
-    // Return true if either name or reading matches
-    return nameMatch || readingMatch;
+    // 3. Match against 2-character code (exact match if input is 2 chars)
+    let codeMatch = false;
+    if (isTwoCharInput && itemCodeHiragana && itemCodeHiragana === searchTermHiragana) {
+        // console.log(`[generateDegradationPredictions] Code match found: input='${searchTermHiragana}', itemCode='${itemCodeHiragana}' for item: ${item.name}`);
+        codeMatch = true;
+    }
+
+    // Return true if any match
+    return nameMatch || readingMatch || codeMatch;
   });
 
-  // Map to prediction string (Name [Code])
+  // Map to prediction string (Name ONLY) - ★ 表示を修正
   const predictions = matchedItems.map(item => {
-    return item.code ? `${item.name} [${item.code}]` : item.name;
+    return item.name; // item.code を表示しない
   });
 
-  // console.log(`[generateDegradationPredictions] Found ${predictions.length} predictions:`, predictions.slice(0, 10));
+  // console.log(`[generateDegradationPredictions] Found ${predictions.length} raw predictions:`, predictions);
 
   // Return unique predictions, limited to 10
-  return [...new Set(predictions)].slice(0, 10);
+  const uniquePredictions = [...new Set(predictions)];
+  // console.log(`[generateDegradationPredictions] Returning ${uniquePredictions.length} unique predictions:`, uniquePredictions.slice(0, 10));
+  return uniquePredictions.slice(0, 10);
 }
 
 function showPredictions(inputElement, predictionListElement, predictions) {
