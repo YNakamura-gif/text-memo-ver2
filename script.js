@@ -327,49 +327,58 @@ function generateLocationPredictions(inputText) {
   return uniqueCombinations.slice(0, 10);
 }
 
-function generateDeteriorationPredictions(inputText) {
-  console.log(`[generateDeteriorationPredictions] Input: "${inputText}"`);
-  // ★ 入力もひらがなに変換
-  const searchTermHiragana = katakanaToHiragana(inputText.trim().toLowerCase());
-  if (!searchTermHiragana) return [];
-
-  console.log("[generateDeteriorationPredictions] Searching in degradationItemsData:", degradationItemsData.length, "items with term:", searchTermHiragana);
-
-  let results = [];
-
-  // 1. 読み仮名による前方一致検索 (ひらがなで比較)
-  const readingMatches = degradationItemsData
-    .filter(item => {
-        // ★ CSV側の読み仮名もひらがなに変換して比較
-        const readingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
-        return readingHiragana.startsWith(searchTermHiragana);
-    })
-    .map(item => item.name);
-
-  console.log(`[generateDeteriorationPredictions] Reading matches found: ${readingMatches.length}`); 
-  if (readingMatches.length > 0) console.log("[generateDeteriorationPredictions] Reading matches sample:", readingMatches.slice(0, 5));
-  results = results.concat(readingMatches);
-
-  // 2. 2文字コードによる完全一致検索 (入力がちょうど2文字の場合)
-  // ★ コード検索はそのまま (英数字想定)
-  const searchTermCode = inputText.trim().toLowerCase(); // コード検索用は元の入力を使う
-  if (searchTermCode.length === 2) { 
-    const codeMatches = degradationItemsData
-      .filter(item => {
-          const codeLower = item.code?.toLowerCase();
-          return codeLower && codeLower === searchTermCode;
-        })
-      .map(item => item.name); 
-      
-    console.log(`[generateDeteriorationPredictions] Code matches found for '${searchTermCode}': ${codeMatches.length}`); 
-    if (codeMatches.length > 0) console.log("[generateDeteriorationPredictions] Code matches sample:", codeMatches.slice(0, 5));
-    results = results.concat(codeMatches);
+function generateDegradationPredictions(inputText) {
+  // console.log(`[generateDegradationPredictions] Input: \"${inputText}\"`);
+  if (!inputText || inputText.trim().length < 1) {
+    return []; // Return empty if input is too short or empty
   }
 
-  // 重複を除去して最大10件返す
-  const uniqueResults = [...new Set(results)];
-  console.log(`[generateDeteriorationPredictions] Total unique results before slice: ${uniqueResults.length}`);
-  return uniqueResults.slice(0, 10);
+  const searchTermLower = inputText.trim().toLowerCase();
+  const searchTermHiragana = katakanaToHiragana(searchTermLower);
+  const isTwoCharInput = searchTermHiragana.length === 2; // ★ ひらがな変換後の長さで2文字判定
+  // console.log(`[generateDegradationPredictions] Search terms: lower='${searchTermLower}', hiragana='${searchTermHiragana}', isTwoChar=${isTwoCharInput}`);
+
+  const matchedItems = degradationItemsData.filter(item => {
+    const itemNameLower = item.name?.toLowerCase() || '';
+    const itemReadingRaw = item.reading || ''; // Get the raw reading string
+    const itemCodeHiragana = katakanaToHiragana(item.code?.toLowerCase() || ''); // ★ 2文字コードもひらがな化
+
+    // 1. Match against name (partial match)
+    const nameMatch = itemNameLower.includes(searchTermLower);
+
+    // 2. Match against any reading part (prefix match on Hiragana)
+    const readingParts = itemReadingRaw.split(' '); // Split readings by space
+    let readingMatch = false;
+    for (const part of readingParts) {
+      const partHiragana = katakanaToHiragana(part.toLowerCase());
+      if (partHiragana.startsWith(searchTermHiragana)) {
+        readingMatch = true;
+        break; // Found a match in readings, no need to check further parts
+      }
+    }
+
+    // 3. Match against 2-character code (exact match if input is 2 chars)
+    let codeMatch = false;
+    if (isTwoCharInput && itemCodeHiragana && itemCodeHiragana === searchTermHiragana) {
+        // console.log(`[generateDegradationPredictions] Code match found: input='${searchTermHiragana}', itemCode='${itemCodeHiragana}' for item: ${item.name}`);
+        codeMatch = true;
+    }
+
+    // Return true if any match
+    return nameMatch || readingMatch || codeMatch;
+  });
+
+  // Map to prediction string (Name ONLY) - ★ 表示を修正
+  const predictions = matchedItems.map(item => {
+    return item.name; // item.code を表示しない
+  });
+
+  // console.log(`[generateDegradationPredictions] Found ${predictions.length} raw predictions:`, predictions);
+
+  // Return unique predictions, limited to 10
+  const uniquePredictions = [...new Set(predictions)];
+  // console.log(`[generateDegradationPredictions] Returning ${uniquePredictions.length} unique predictions:`, uniquePredictions.slice(0, 10));
+  return uniquePredictions.slice(0, 10);
 }
 
 function showPredictions(inputElement, predictionListElement, predictions) {
@@ -1146,13 +1155,13 @@ async function initializeApp() {
 
   // Input Predictions (Deterioration Form)
   setupPredictionListeners(locationInput, locationPredictionsElement, generateLocationPredictions, 'deteriorationNameInput');
-  setupPredictionListeners(deteriorationNameInput, suggestionsElement, generateDeteriorationPredictions, 'photoNumberInput');
+  setupPredictionListeners(deteriorationNameInput, suggestionsElement, generateDegradationPredictions, 'photoNumberInput');
 
   // Edit Modal Handling
   editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, editModalElement));
   cancelEditBtn.addEventListener('click', () => editModalElement.classList.add('hidden'));
   setupPredictionListeners(editLocationInput, editLocationPredictionsElement, generateLocationPredictions, 'editDeteriorationNameInput');
-  setupPredictionListeners(editDeteriorationNameInput, editSuggestionsElement, generateDeteriorationPredictions, 'editPhotoNumberInput');
+  setupPredictionListeners(editDeteriorationNameInput, editSuggestionsElement, generateDegradationPredictions, 'editPhotoNumberInput');
 
   // CSV Export
   exportCsvBtn.addEventListener('click', () => handleExportCsv(siteNameInput, buildingSelectElement));
