@@ -1493,14 +1493,34 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) { // 引
 }
 
 // ★ 再追加: handleEditClick 関数
-function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+// ★ 修正: 編集対象データをFirebaseから取得して表示するように変更
+async function handleEditClick(projectId, buildingId, recordId, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
   console.log(`[handleEditClick] Editing record with ID: ${recordId} in project ID: ${projectId}, building ID: ${buildingId}`);
   currentEditRecordId = recordId;
-  editModalElement.classList.remove('hidden');
-  editIdDisplay.textContent = recordId;
-  editLocationInput.value = locationInput.value;
-  editDeteriorationNameInput.value = deteriorationNameInput.value;
-  editPhotoNumberInput.value = photoNumberInput.value;
+
+  // Firebaseから編集対象のデータを取得
+  const recordRef = getDeteriorationsRef(projectId, buildingId).child(recordId);
+  try {
+    const snapshot = await recordRef.once('value');
+    const recordData = snapshot.val();
+
+    if (recordData) {
+      // データをモーダルに設定
+      editIdDisplay.textContent = recordId; // IDはそのまま表示
+      editLocationInput.value = recordData.location || '';
+      editDeteriorationNameInput.value = recordData.name || '';
+      editPhotoNumberInput.value = recordData.photoNumber || '';
+
+      // モーダルを表示
+      editModalElement.classList.remove('hidden');
+    } else {
+      console.error(`[handleEditClick] Record data not found for ID: ${recordId}`);
+      alert("編集対象のデータが見つかりませんでした。");
+    }
+  } catch (error) {
+    console.error("[handleEditClick] Error fetching record data:", error);
+    alert("編集データの取得中にエラーが発生しました: " + error.message);
+  }
 }
 
 // ★ 再追加: handleDeleteClick 関数
