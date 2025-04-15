@@ -675,7 +675,11 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
       currentBuildingId = null;
     }
   } catch (error) {
-    // ★★★ エラーログを強化 ★★★
+    // ★★★★★ CATCH BLOCK ENTERED ★★★★★
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("[updateBuildingSelectorForProject] <<<< CATCH BLOCK EXECUTED >>>>");
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    // ★★★★★★★★★★★★★★★★★★★★★★
     console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching or processing buildings for project ${projectId}:`);
     // エラーオブジェクト全体、メッセージ、スタックトレースを出力
     console.error("Error Object:", error);
