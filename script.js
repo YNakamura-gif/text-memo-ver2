@@ -1218,26 +1218,117 @@ async function initializeApp() {
 document.addEventListener('DOMContentLoaded', initializeApp);
 
 // ======================================================================
-// 10. Event Handler - Add Project/Building
+// 10. Event Handler - Add Project/Building (Refactored)
 // ======================================================================
-// ★ 修正: チェックボックス方式に対応 + プロジェクトIDの競合問題を修正
+// --- Helper function to ensure project exists ---
+async function ensureProjectExists(projectId, siteName, projectDataListElement) {
+  console.log(`[ensureProjectExists] Checking/Creating project info for ${projectId}...`);
+  const projectInfoRef = getProjectInfoRef(projectId);
+  const projectInfoSnapshot = await projectInfoRef.once('value');
+  let projectInfoCreatedOrUpdated = false;
+
+  if (!projectInfoSnapshot.exists()) {
+    console.log(`[ensureProjectExists] Project info for ${projectId} does not exist. Creating...`);
+    await projectInfoRef.set({
+      siteName: siteName,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    projectInfoCreatedOrUpdated = true;
+    console.log("[ensureProjectExists] Project info saved successfully.");
+    // Datalist更新は非同期で実行
+    populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
+  } else {
+    const existingSiteName = projectInfoSnapshot.val().siteName;
+    if (existingSiteName !== siteName) {
+      console.log(`[ensureProjectExists] Updating existing project ${projectId} siteName from '${existingSiteName}' to '${siteName}'.`);
+      await projectInfoRef.update({ siteName: siteName });
+      projectInfoCreatedOrUpdated = true;
+      // Datalist更新は非同期で実行
+      populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
+    } else {
+      console.log(`[ensureProjectExists] Project info for ${projectId} already exists and name is current.`);
+    }
+  }
+  return projectInfoCreatedOrUpdated;
+}
+
+// --- Helper function to determine buildings to add ---
+function determineBuildingsToAdd(buildingCheckboxContainer) {
+  const buildingsToAdd = [
+    { id: "site", name: "敷地" },
+    { id: "buildingA", name: "A棟" }
+  ];
+  let lastCheckedBuildingId = "buildingA";
+  const allBuildingTypeOrder = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"];
+
+  const checkedOtherBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked:not(:disabled)');
+  checkedOtherBuildingCheckboxes.forEach(checkbox => {
+    const buildingId = checkbox.value;
+    if (!buildingsToAdd.some(b => b.id === buildingId)) {
+      const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
+      const buildingName = label ? label.textContent.trim() : buildingId;
+      buildingsToAdd.push({ id: buildingId, name: buildingName });
+    }
+  });
+
+  buildingsToAdd.sort((a, b) => allBuildingTypeOrder.indexOf(a.id) - allBuildingTypeOrder.indexOf(b.id));
+
+  if (buildingsToAdd.length > 0) { // Should always be true because of mandatory buildings
+    lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id;
+  }
+
+  console.log(`[determineBuildingsToAdd] Buildings determined:`, buildingsToAdd.map(b => b.id), `Last checked: ${lastCheckedBuildingId}`);
+  return { buildingsToAdd, lastCheckedBuildingId };
+}
+
+// --- Helper function to save buildings to Firebase ---
+async function saveBuildingsToFirebase(projectId, buildingsToAdd) {
+  console.log(`[saveBuildingsToFirebase] Starting Firebase save for ${buildingsToAdd.length} buildings in project ${projectId}...`);
+  const buildingAddPromises = buildingsToAdd.map(async (building) => {
+    const buildingRef = getBuildingsRef(projectId).child(building.id);
+    const buildingSnapshot = await buildingRef.once('value');
+    if (!buildingSnapshot.exists()) {
+      await buildingRef.set({
+        name: building.name,
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      console.log(`[saveBuildingsToFirebase] Building ${building.id} saved.`);
+      return true; // New
+    } else {
+      const existingBuildingName = buildingSnapshot.val().name;
+      if (existingBuildingName !== building.name) {
+        console.log(`[saveBuildingsToFirebase] Updating existing building ${building.id} name from '${existingBuildingName}' to '${building.name}'.`);
+        await buildingRef.update({ name: building.name });
+        return true; // Updated
+      }
+      console.log(`[saveBuildingsToFirebase] Building ${building.id} already exists and name is current.`);
+      return false; // No change
+    }
+  });
+
+  const results = await Promise.all(buildingAddPromises);
+  const wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
+  console.log(`[saveBuildingsToFirebase] Promise.all completed. wasAnyBuildingAddedOrUpdated: ${wasAnyBuildingAddedOrUpdated}`);
+  return wasAnyBuildingAddedOrUpdated;
+}
+
+// 10. Event Handler - Add Project/Building (Refactored)
+// ======================================================================
 async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContainer, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
-  console.log("--- Add Building Start ---");
-  console.log("[handleAddProjectAndBuilding] Triggered (Checkbox mode).");
+  console.log("--- Add Building Start (Refactored) ---");
   const siteName = siteNameInput.value.trim();
   const checkedBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked');
 
+  // --- 1. Input Validation ---
   if (!siteName) {
     alert("現場名を入力してください。");
     return;
   }
-  // ★ 修正: disabled も含めてチェックされているか確認 (敷地/A棟のみの場合があるため)
   if (checkedBuildingCheckboxes.length === 0) {
     alert("追加する建物を1つ以上選択してください。");
     return;
   }
 
-  // ★★★ この関数内で使用するprojectIdを確定 ★★★
   const projectId = generateProjectId(siteName);
   if (!projectId) {
     alert("現場名が無効です。");
@@ -1245,133 +1336,51 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
   }
   console.log(`[handleAddProjectAndBuilding] Generated Project ID: ${projectId}`);
 
-  // --- プロジェクト情報と建物追加を試行 ---
   try {
-    // --- 1. プロジェクト情報の設定 (初回のみ) ---
-    console.log(`[handleAddProjectAndBuilding] Checking/Creating project info for ${projectId}...`);
-    const projectInfoRef = getProjectInfoRef(projectId); // ★ ローカルのprojectIdを使用
-    const projectInfoSnapshot = await projectInfoRef.once('value');
-    let projectInfoCreatedOrUpdated = false;
-    if (!projectInfoSnapshot.exists()) {
-      console.log(`[handleAddProjectAndBuilding] Project info for ${projectId} does not exist. Creating...`);
-      await projectInfoRef.set({
-        siteName: siteName,
-        createdAt: firebase.database.ServerValue.TIMESTAMP
-      });
-      projectInfoCreatedOrUpdated = true;
-      console.log("[handleAddProjectAndBuilding] Project info saved successfully.");
-      // Datalist更新は非同期で実行 (UI更新をブロックしない)
-      populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
-    } else {
-      const existingSiteName = projectInfoSnapshot.val().siteName;
-      if (existingSiteName !== siteName) {
-        console.log(`[handleAddProjectAndBuilding] Updating existing project ${projectId} siteName from '${existingSiteName}' to '${siteName}'.`);
-        await projectInfoRef.update({ siteName: siteName });
-        projectInfoCreatedOrUpdated = true;
-         // Datalist更新は非同期で実行
-        populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
-      } else {
-        console.log(`[handleAddProjectAndBuilding] Project info for ${projectId} already exists and name is current.`);
-      }
-    }
+    // --- 2. Ensure Project Exists ---
+    const projectInfoCreatedOrUpdated = await ensureProjectExists(projectId, siteName, projectDataListElement);
 
-    // --- 2. 建物の追加処理 --- 
-    const buildingsToAdd = [];
-    let lastCheckedBuildingId = null;
-    const allBuildingTypeOrder = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"];
+    // --- 3. Determine Buildings to Add ---
+    const { buildingsToAdd, lastCheckedBuildingId } = determineBuildingsToAdd(buildingCheckboxContainer);
 
-    // ★ 敷地とA棟は常に含める
-    if (!buildingsToAdd.some(b => b.id === 'site')) {
-        buildingsToAdd.push({ id: "site", name: "敷地" });
-    }
-    if (!buildingsToAdd.some(b => b.id === 'buildingA')) {
-        buildingsToAdd.push({ id: "buildingA", name: "A棟" });
-    }
-
-    // チェックされたB棟以降を追加 (disabledでないもの)
-    const checkedOtherBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked:not(:disabled)');
-    checkedOtherBuildingCheckboxes.forEach(checkbox => {
-      const buildingId = checkbox.value;
-      if (!buildingsToAdd.some(b => b.id === buildingId)) {
-        const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
-        const buildingName = label ? label.textContent.trim() : buildingId;
-        buildingsToAdd.push({ id: buildingId, name: buildingName });
-      }
-    });
-
-    buildingsToAdd.sort((a, b) => allBuildingTypeOrder.indexOf(a.id) - allBuildingTypeOrder.indexOf(b.id));
-
-    if (buildingsToAdd.length > 0) {
-      lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id;
-    } else {
-        // このケースは通常発生しないはず (敷地/A棟が必ず含まれるため)
-        console.warn("[handleAddProjectAndBuilding] No buildings selected to add, defaulting lastChecked to site.");
-        lastCheckedBuildingId = 'site'; // フォールバック
-    }
-
-    console.log(`[handleAddProjectAndBuilding] Buildings to add/check (including mandatory):`, buildingsToAdd.map(b => b.id));
-
-    // --- 3. Firebaseへの建物データ保存 (並列処理) ---
-    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings in project ${projectId}...`); // ★ ローカルprojectIdを使用
-    const buildingAddPromises = buildingsToAdd.map(async (building) => {
-      const buildingRef = getBuildingsRef(projectId).child(building.id); // ★ ローカルprojectIdを使用
-      const buildingSnapshot = await buildingRef.once('value');
-      if (!buildingSnapshot.exists()) {
-        await buildingRef.set({
-          name: building.name,
-          createdAt: firebase.database.ServerValue.TIMESTAMP
-        });
-        console.log(`[handleAddProjectAndBuilding] Building ${building.id} saved.`);
-        return true; // 新規追加
-      } else {
-        const existingBuildingName = buildingSnapshot.val().name;
-        if (existingBuildingName !== building.name) {
-          console.log(`[handleAddProjectAndBuilding] Updating existing building ${building.id} name from '${existingBuildingName}' to '${building.name}'.`);
-          await buildingRef.update({ name: building.name });
-          return true; // 更新も変更ありとみなす
-        }
-        console.log(`[handleAddProjectAndBuilding] Building ${building.id} already exists and name is current.`);
-        return false; // 既存で変更なし
-      }
-    });
-
+    // --- 4. Save Buildings ---
     let wasAnyBuildingAddedOrUpdated = false;
-    try {
-      console.log("[handleAddProjectAndBuilding] Awaiting Promise.all for building saves...");
-      const results = await Promise.all(buildingAddPromises);
-      console.log("[handleAddProjectAndBuilding] Promise.all completed. Results:", results);
-      wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
-      console.log(`[handleAddProjectAndBuilding] wasAnyBuildingAddedOrUpdated: ${wasAnyBuildingAddedOrUpdated}`);
-    } catch (saveError) {
-      console.error("[handleAddProjectAndBuilding] <<<< ERROR during Promise.all >>>> Error saving/updating buildings:", saveError);
-      alert(`建物の保存中にエラーが発生しました: ${saveError.message}`);
-      return; // エラー発生時はここで処理を中断
+    if (buildingsToAdd.length > 0) {
+        try {
+            wasAnyBuildingAddedOrUpdated = await saveBuildingsToFirebase(projectId, buildingsToAdd);
+        } catch (saveError) {
+            console.error("[handleAddProjectAndBuilding] <<<< ERROR during saveBuildingsToFirebase >>>>:", saveError);
+            alert(`建物の保存中にエラーが発生しました: ${saveError.message}`);
+            return; // Stop processing on save error
+        }
+    } else {
+        console.warn("[handleAddProjectAndBuilding] No buildings determined to be added.");
+        // Optionally, handle this case, maybe alert the user or proceed differently
     }
 
-    // --- 4. UI更新 --- 
+
+    // --- 5. Update UI & Global State ---
     console.log(`[handleAddProjectAndBuilding] Preparing to update UI. Project: ${projectId}, Building to select: ${lastCheckedBuildingId}`);
-    // ★★★ 建物セレクタ更新 (ローカルのprojectIdを使用) ★★★
     await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeProjectNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, lastCheckedBuildingId);
 
-    // --- 5. 状態更新とタブ切り替え (成功時のみ) ---
-    // ★★★ グローバル変数とlocalStorageの更新 ★★★
+    // Update global state only after all operations potentially using it are done
     currentProjectId = projectId;
-    currentBuildingId = lastCheckedBuildingId; // updateBuildingSelector内で設定されるが念のため
-    lastUsedBuilding = lastCheckedBuildingId; // 同上
+    // currentBuildingId is updated within updateBuildingSelectorForProject now based on selection logic
+    // We'll rely on updateBuildingSelectorForProject to set currentBuildingId and lastUsedBuilding correctly.
     localStorage.setItem('lastProjectId', currentProjectId);
-    localStorage.setItem('lastBuildingId', currentBuildingId);
-    console.log(`[handleAddProjectAndBuilding] Successfully updated state: currentProjectId=${currentProjectId}, currentBuildingId=${currentBuildingId}`);
+    // localStorage.setItem('lastBuildingId', currentBuildingId); // updateBuildingSelector handles this
 
+
+    console.log(`[handleAddProjectAndBuilding] State updated: currentProjectId=${currentProjectId}`); // Log currentProjectId, currentBuildingId might be async updated
+
+    // Update UI elements
     activeProjectNameSpanElement.textContent = siteName;
     buildingSelectElement.disabled = false;
-    // チェックボックスをクリア (disabledでないもののみ)
     buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:not(:disabled)').forEach(checkbox => checkbox.checked = false);
-     // disabledの敷地とA棟はチェック状態を維持
-    document.getElementById('addBuilding-site').checked = true;
+    document.getElementById('addBuilding-site').checked = true; // Keep mandatory checked
     document.getElementById('addBuilding-A').checked = true;
 
-
-    // 建物が1つでも新規追加/更新された場合、またはプロジェクト情報が更新された場合は詳細タブに移動
+    // --- 6. Switch Tab ---
     if (wasAnyBuildingAddedOrUpdated || projectInfoCreatedOrUpdated) {
       console.log('[handleAddProjectAndBuilding] Switching to detail tab due to changes.');
       switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
@@ -1379,13 +1388,12 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
       console.log('[handleAddProjectAndBuilding] No changes made, switching to detail tab anyway.');
       switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); 
     }
-    console.log("--- Add Building End (Success) ---");
+    console.log("--- Add Building End (Success - Refactored) ---");
 
   } catch (error) {
-    // ★★★ 関数全体の予期せぬエラー ★★★
-    console.error("[handleAddProjectAndBuilding] <<<< UNEXPECTED FUNCTION ERROR >>>> :", error);
+    console.error("[handleAddProjectAndBuilding] <<<< UNEXPECTED FUNCTION ERROR (Refactored) >>>> :", error);
     alert(`処理中に予期せぬエラーが発生しました: ${error.message}`);
-    console.log("--- Add Building End (Error) ---");
+    console.log("--- Add Building End (Error - Refactored) ---");
   }
 }
 
