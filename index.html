@@ -27,57 +27,63 @@
 
     <!-- 基本情報タブ -->
     <div id="infoTab" class="tab-content hidden">
-      <div class="bg-white p-4 rounded-md shadow-sm mb-6">
+      <div class="bg-white p-4 rounded-md shadow-sm">
         <h2 class="text-lg font-semibold mb-4">基本情報</h2>
-        
-        <!--
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">調査日</label>
-          <input
-            type="date"
-            id="surveyDate"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-        </div>
-        -->
-        
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">現場名</label>
-          <input
-            type="text"
-            id="siteName"
-            placeholder="現場名を入力または選択"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-            list="projectDataList"
-          >
-          <datalist id="projectDataList">
-          </datalist>
-        </div>
-        
-        <div class="mb-4">
-          <label for="buildingSelectPresetElement" class="block text-sm font-medium text-gray-700 mb-1">建物プリセット</label>
-          <div class="flex items-center space-x-2">
-            <div class="relative flex-grow">
-              <select
-                id="buildingSelectPresetElement"
-                class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
-              >
-                <option value="site" data-id="site">敷地</option>
-                <option value="buildingA" data-id="buildingA">A棟</option>
-                <option value="uptoB" data-id="uptoB">B棟まで追加</option>
-                <option value="uptoC" data-id="uptoC">C棟まで追加</option>
-                <option value="uptoD" data-id="uptoD">D棟まで追加</option>
-                <option value="uptoE" data-id="uptoE">E棟まで追加</option>
-                <option value="uptoF" data-id="uptoF">F棟まで追加</option>
-                <option value="uptoG" data-id="uptoG">G棟まで追加</option>
-                <option value="uptoH" data-id="uptoH">H棟まで追加</option>
-                <option value="uptoI" data-id="uptoI">I棟まで追加</option>
-              </select>
-            </div>
-            <button id="addBuildingBtn" type="button" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4">
-              この建物を追加
-            </button>
+          <label for="siteName" class="block text-sm font-medium text-gray-700 mb-1">現場名</label>
+          <div class="relative">
+            <input id="siteName" type="text" list="projectDataList" placeholder="現場名を入力または選択" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
+            <datalist id="projectDataList"></datalist>
           </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">建物を追加</label>
+          <div id="buildingCheckboxContainer" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-4 gap-y-2 mb-3 p-3 border border-gray-200 rounded-md">
+            <div>
+              <input type="checkbox" id="addBuilding-site" name="buildingToAdd" value="site" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-site" class="text-sm">敷地</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-A" name="buildingToAdd" value="buildingA" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-A" class="text-sm">A棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-B" name="buildingToAdd" value="buildingB" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-B" class="text-sm">B棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-C" name="buildingToAdd" value="buildingC" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-C" class="text-sm">C棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-D" name="buildingToAdd" value="buildingD" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-D" class="text-sm">D棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-E" name="buildingToAdd" value="buildingE" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-E" class="text-sm">E棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-F" name="buildingToAdd" value="buildingF" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-F" class="text-sm">F棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-G" name="buildingToAdd" value="buildingG" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-G" class="text-sm">G棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-H" name="buildingToAdd" value="buildingH" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-H" class="text-sm">H棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-I" name="buildingToAdd" value="buildingI" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-I" class="text-sm">I棟</label>
+            </div>
+          </div>
+          <button id="addBuildingBtn" type="button" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4 w-full sm:w-auto">
+            選択した建物を追加
+          </button>
         </div>
       </div>
     </div>
