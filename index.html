@@ -55,20 +55,23 @@
         </div>
         
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">点検箇所</label>
-          <div class="flex items-end space-x-2">
-            <div class="flex-grow">
-              <select id="buildingSelectPreset" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
-                <option value="敷地">敷地</option>
-                <option value="A棟">A棟</option>
-                <option value="B棟">B棟</option>
-                <option value="C棟">C棟</option>
-                <option value="D棟">D棟</option>
-                <option value="E棟">E棟</option>
-                <option value="F棟">F棟</option>
-                <option value="G棟">G棟</option>
-                <option value="H棟">H棟</option>
-                <option value="I棟">I棟</option>
+          <label for="buildingSelectPresetElement" class="block text-sm font-medium text-gray-700 mb-1">建物プリセット</label>
+          <div class="flex items-center space-x-2">
+            <div class="relative flex-grow">
+              <select
+                id="buildingSelectPresetElement"
+                class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
+              >
+                <option value="site" data-id="site">敷地</option>
+                <option value="buildingA" data-id="buildingA">A棟</option>
+                <option value="uptoB" data-id="uptoB">B棟まで追加</option>
+                <option value="uptoC" data-id="uptoC">C棟まで追加</option>
+                <option value="uptoD" data-id="uptoD">D棟まで追加</option>
+                <option value="uptoE" data-id="uptoE">E棟まで追加</option>
+                <option value="uptoF" data-id="uptoF">F棟まで追加</option>
+                <option value="uptoG" data-id="uptoG">G棟まで追加</option>
+                <option value="uptoH" data-id="uptoH">H棟まで追加</option>
+                <option value="uptoI" data-id="uptoI">I棟まで追加</option>
               </select>
             </div>
             <button id="addBuildingBtn" type="button" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4">
