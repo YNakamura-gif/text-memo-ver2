@@ -1001,9 +1001,8 @@ async function initializeApp() {
   const infoTab = document.getElementById('infoTab');
   const detailTab = document.getElementById('detailTab');
   const siteNameInput = document.getElementById('siteName');
-  const projectDataListElement = document.getElementById('projectDataList'); // Crucial for the datalist updates
+  const projectDataListElement = document.getElementById('projectDataList'); 
   const addBuildingBtn = document.getElementById('addBuildingBtn');
-  const buildingSelectPresetElement = document.getElementById('buildingSelectPreset');
   const buildingSelectElement = document.getElementById('buildingSelect');
   const activeProjectNameSpanElement = document.getElementById('activeProjectName');
   const activeBuildingNameSpanElement = document.getElementById('activeBuildingName');
@@ -1028,7 +1027,7 @@ async function initializeApp() {
   const editSuggestionsElement = document.getElementById('editSuggestions');
   const editPhotoNumberInput = document.getElementById('editPhotoNumberInput');
   const cancelEditBtn = document.getElementById('cancelEditBtn');
-  const buildingCheckboxContainer = document.getElementById('buildingCheckboxContainer'); // ★ 追加: チェックボックスのコンテナ取得
+  const buildingCheckboxContainer = document.getElementById('buildingCheckboxContainer'); 
 
   // Load prediction data (CSV files)
   await loadPredictionData();
@@ -1037,17 +1036,17 @@ async function initializeApp() {
   // Tab switching
   infoTabBtn.addEventListener('click', () => switchTab('info', infoTabBtn, detailTabBtn, infoTab, detailTab));
   detailTabBtn.addEventListener('click', () => {
-    // Allow switching even if no project/building selected, but functionality might be limited
     switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
   });
 
   // Basic Info saving (site name only)
   setupBasicInfoListeners(siteNameInput);
 
-  // Add Project/Building
-  addBuildingBtn.addEventListener('click', () => handleAddProjectAndBuilding(
+  // Add Project/Building 
+  // ★ 修正: リスナー重複登録を防ぐため、一度リスナーを削除してから再登録する
+  const addBuildingHandler = () => handleAddProjectAndBuilding(
     siteNameInput, 
-    buildingSelectPresetElement, 
+    buildingCheckboxContainer, // ★ 修正: チェックボックスコンテナを渡す
     projectDataListElement, 
     buildingSelectElement, 
     activeProjectNameSpanElement, 
@@ -1063,9 +1062,15 @@ async function initializeApp() {
     detailTabBtn, 
     infoTab, 
     detailTab
-  ));
+  );
+  // 既存のリスナーがあれば削除
+  addBuildingBtn.removeEventListener('click', addBuildingHandler);
+  // 新しいリスナーを登録
+  addBuildingBtn.addEventListener('click', addBuildingHandler);
+  console.log("[Init] addBuildingBtn listener attached (or re-attached)."); // ★ ログ追加
 
-  // Site/Building Selection (Sets up focus and change listeners for siteNameInput)
+  // Site/Building Selection
+  // ★ 修正: setupSelectionListeners から buildingSelectPresetElement を削除
   setupSelectionListeners(
       siteNameInput, 
       projectDataListElement, 
@@ -1193,6 +1198,7 @@ document.addEventListener('DOMContentLoaded', initializeApp);
 // ======================================================================
 // ★ 修正: チェックボックス方式に対応
 async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContainer, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
+  console.log("--- Add Building Start ---"); // ★ デバッグログ追加
   console.log("[handleAddProjectAndBuilding] Triggered (Checkbox mode).");
   const siteName = siteNameInput.value.trim();
   
