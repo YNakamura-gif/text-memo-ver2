@@ -670,7 +670,13 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
     }
   } catch (error) {
     // ★★★ エラーログを強化 ★★★
-    console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching or processing buildings for project ${projectId}:`, error);
+    console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching or processing buildings for project ${projectId}:`);
+    // エラーオブジェクト全体、メッセージ、スタックトレースを出力
+    console.error("Error Object:", error);
+    console.error("Error Message:", error.message);
+    console.error("Error Name:", error.name);
+    console.error("Error Stack:", error.stack);
+    // ★★★★★★★★★★★★★★★★★★★★★★
     buildingSelectElement.innerHTML = '<option value="">読み込みエラー</option>';
     activeBuildingNameSpanElement.textContent = 'エラー';
     renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
