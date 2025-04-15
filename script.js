@@ -1220,24 +1220,24 @@ document.addEventListener('DOMContentLoaded', initializeApp);
 // ======================================================================
 // 10. Event Handler - Add Project/Building
 // ======================================================================
-// ★ 修正: チェックボックス方式に対応
+// ★ 修正: チェックボックス方式に対応 + プロジェクトIDの競合問題を修正
 async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContainer, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
-  console.log("--- Add Building Start ---"); // ★ デバッグログ追加
+  console.log("--- Add Building Start ---");
   console.log("[handleAddProjectAndBuilding] Triggered (Checkbox mode).");
   const siteName = siteNameInput.value.trim();
-  
-  // チェックされた建物を取得
   const checkedBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked');
-  
+
   if (!siteName) {
     alert("現場名を入力してください。");
     return;
   }
+  // ★ 修正: disabled も含めてチェックされているか確認 (敷地/A棟のみの場合があるため)
   if (checkedBuildingCheckboxes.length === 0) {
-      alert("追加する建物を1つ以上選択してください。");
-      return;
+    alert("追加する建物を1つ以上選択してください。");
+    return;
   }
 
+  // ★★★ この関数内で使用するprojectIdを確定 ★★★
   const projectId = generateProjectId(siteName);
   if (!projectId) {
     alert("現場名が無効です。");
@@ -1245,13 +1245,11 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
   }
   console.log(`[handleAddProjectAndBuilding] Generated Project ID: ${projectId}`);
 
-  currentProjectId = projectId;
-  localStorage.setItem('lastProjectId', currentProjectId);
-  const projectInfoRef = getProjectInfoRef(projectId);
-
+  // --- プロジェクト情報と建物追加を試行 ---
   try {
     // --- 1. プロジェクト情報の設定 (初回のみ) ---
     console.log(`[handleAddProjectAndBuilding] Checking/Creating project info for ${projectId}...`);
+    const projectInfoRef = getProjectInfoRef(projectId); // ★ ローカルのprojectIdを使用
     const projectInfoSnapshot = await projectInfoRef.once('value');
     let projectInfoCreatedOrUpdated = false;
     if (!projectInfoSnapshot.exists()) {
@@ -1262,64 +1260,61 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
       });
       projectInfoCreatedOrUpdated = true;
       console.log("[handleAddProjectAndBuilding] Project info saved successfully.");
-      const updatedProjectNames = await populateProjectDataList(projectDataListElement);
-      updateDatalistWithOptions(updatedProjectNames, projectDataListElement);
+      // Datalist更新は非同期で実行 (UI更新をブロックしない)
+      populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
     } else {
       const existingSiteName = projectInfoSnapshot.val().siteName;
       if (existingSiteName !== siteName) {
         console.log(`[handleAddProjectAndBuilding] Updating existing project ${projectId} siteName from '${existingSiteName}' to '${siteName}'.`);
         await projectInfoRef.update({ siteName: siteName });
         projectInfoCreatedOrUpdated = true;
-        const updatedProjectNames = await populateProjectDataList(projectDataListElement);
-        updateDatalistWithOptions(updatedProjectNames, projectDataListElement);
+         // Datalist更新は非同期で実行
+        populateProjectDataList(projectDataListElement).then(names => updateDatalistWithOptions(names, projectDataListElement));
       } else {
         console.log(`[handleAddProjectAndBuilding] Project info for ${projectId} already exists and name is current.`);
       }
     }
 
     // --- 2. 建物の追加処理 --- 
-    const buildingsToAdd = [
-        { id: "site", name: "敷地" },      // ★ 必ず追加
-        { id: "buildingA", name: "A棟" } // ★ 必ず追加
-    ];
-    let lastCheckedBuildingId = "buildingA"; // デフォルトはA棟を選択状態にする
+    const buildingsToAdd = [];
+    let lastCheckedBuildingId = null;
     const allBuildingTypeOrder = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"];
 
-    // チェックされたB棟以降の建物を取得 (disabledでないもののみ)
-    const checkedOtherBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked:not(:disabled)'); 
+    // ★ 敷地とA棟は常に含める
+    if (!buildingsToAdd.some(b => b.id === 'site')) {
+        buildingsToAdd.push({ id: "site", name: "敷地" });
+    }
+    if (!buildingsToAdd.some(b => b.id === 'buildingA')) {
+        buildingsToAdd.push({ id: "buildingA", name: "A棟" });
+    }
 
+    // チェックされたB棟以降を追加 (disabledでないもの)
+    const checkedOtherBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked:not(:disabled)');
     checkedOtherBuildingCheckboxes.forEach(checkbox => {
-        const buildingId = checkbox.value;
-        // すでに追加リストに含まれていないか確認（念のため）
-        if (!buildingsToAdd.some(b => b.id === buildingId)) {
-            const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
-            const buildingName = label ? label.textContent.trim() : buildingId; 
-            buildingsToAdd.push({ id: buildingId, name: buildingName });
-        }
+      const buildingId = checkbox.value;
+      if (!buildingsToAdd.some(b => b.id === buildingId)) {
+        const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
+        const buildingName = label ? label.textContent.trim() : buildingId;
+        buildingsToAdd.push({ id: buildingId, name: buildingName });
+      }
     });
-    
-    // 選択された建物を定義済みの順序でソート
+
     buildingsToAdd.sort((a, b) => allBuildingTypeOrder.indexOf(a.id) - allBuildingTypeOrder.indexOf(b.id));
-    
-    // UIで最後に選択状態にする建物を決定（敷地/A棟のみの場合はA棟、それ以外もチェックされていれば最後の棟）
-    if (buildingsToAdd.length > 2) { // 敷地、A棟以外にチェックがある場合
-        lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id; 
-    } // それ以外（敷地、A棟のみ）の場合は初期値 "buildingA" のまま
+
+    if (buildingsToAdd.length > 0) {
+      lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id;
+    } else {
+        // このケースは通常発生しないはず (敷地/A棟が必ず含まれるため)
+        console.warn("[handleAddProjectAndBuilding] No buildings selected to add, defaulting lastChecked to site.");
+        lastCheckedBuildingId = 'site'; // フォールバック
+    }
 
     console.log(`[handleAddProjectAndBuilding] Buildings to add/check (including mandatory):`, buildingsToAdd.map(b => b.id));
 
     // --- 3. Firebaseへの建物データ保存 (並列処理) ---
-    // ★★★ currentProjectId の値を確認するログを追加 ★★★
-    console.log(`[handleAddProjectAndBuilding] Checking currentProjectId before Firebase saves: ${currentProjectId}`);
-    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    if (!currentProjectId) {
-      console.error("[handleAddProjectAndBuilding] currentProjectId is null before adding buildings!");
-      alert("プロジェクトIDが見つかりません。処理を中断します。");
-      return;
-    }
-    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings...`); 
+    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings in project ${projectId}...`); // ★ ローカルprojectIdを使用
     const buildingAddPromises = buildingsToAdd.map(async (building) => {
-      const buildingRef = getBuildingsRef(currentProjectId).child(building.id);
+      const buildingRef = getBuildingsRef(projectId).child(building.id); // ★ ローカルprojectIdを使用
       const buildingSnapshot = await buildingRef.once('value');
       if (!buildingSnapshot.exists()) {
         await buildingRef.set({
@@ -1341,46 +1336,56 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
     });
 
     let wasAnyBuildingAddedOrUpdated = false;
-    try { // ★ Promise.all を try...catch で囲む
-        console.log("[handleAddProjectAndBuilding] Awaiting Promise.all for building saves..."); // ★ 追加ログ
-        const results = await Promise.all(buildingAddPromises);
-        console.log("[handleAddProjectAndBuilding] Promise.all completed. Results:", results); // ★ 追加ログ
-        wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
-        console.log(`[handleAddProjectAndBuilding] wasAnyBuildingAddedOrUpdated: ${wasAnyBuildingAddedOrUpdated}`); // ★ 追加ログ
+    try {
+      console.log("[handleAddProjectAndBuilding] Awaiting Promise.all for building saves...");
+      const results = await Promise.all(buildingAddPromises);
+      console.log("[handleAddProjectAndBuilding] Promise.all completed. Results:", results);
+      wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
+      console.log(`[handleAddProjectAndBuilding] wasAnyBuildingAddedOrUpdated: ${wasAnyBuildingAddedOrUpdated}`);
     } catch (saveError) {
-        // ★★★ 保存処理全体のエラーを捕捉 ★★★
-        console.error("[handleAddProjectAndBuilding] <<<< ERROR during Promise.all >>>> Error saving/updating buildings:", saveError);
-        alert(`建物の保存中にエラーが発生しました: ${saveError.message}`);
-        // UI更新に進まずに終了する、またはエラー状態を示すUI更新を行う
-        return; // ★ エラー発生時はここで処理を中断
+      console.error("[handleAddProjectAndBuilding] <<<< ERROR during Promise.all >>>> Error saving/updating buildings:", saveError);
+      alert(`建物の保存中にエラーが発生しました: ${saveError.message}`);
+      return; // エラー発生時はここで処理を中断
     }
 
     // --- 4. UI更新 --- 
-    // ★ UI更新直前の状態をログ出力
-    console.log(`[handleAddProjectAndBuilding] Preparing to update UI. Project: ${currentProjectId}, Building to select: ${lastCheckedBuildingId}`);
-    // 建物セレクタを更新し、最後にチェックされた建物を表示・選択状態にする
-    await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, lastCheckedBuildingId);
+    console.log(`[handleAddProjectAndBuilding] Preparing to update UI. Project: ${projectId}, Building to select: ${lastCheckedBuildingId}`);
+    // ★★★ 建物セレクタ更新 (ローカルのprojectIdを使用) ★★★
+    await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeProjectNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, lastCheckedBuildingId);
+
+    // --- 5. 状態更新とタブ切り替え (成功時のみ) ---
+    // ★★★ グローバル変数とlocalStorageの更新 ★★★
+    currentProjectId = projectId;
+    currentBuildingId = lastCheckedBuildingId; // updateBuildingSelector内で設定されるが念のため
+    lastUsedBuilding = lastCheckedBuildingId; // 同上
+    localStorage.setItem('lastProjectId', currentProjectId);
+    localStorage.setItem('lastBuildingId', currentBuildingId);
+    console.log(`[handleAddProjectAndBuilding] Successfully updated state: currentProjectId=${currentProjectId}, currentBuildingId=${currentBuildingId}`);
 
     activeProjectNameSpanElement.textContent = siteName;
     buildingSelectElement.disabled = false;
-    
-    // チェックボックスをクリア
-    checkedBuildingCheckboxes.forEach(checkbox => checkbox.checked = false);
+    // チェックボックスをクリア (disabledでないもののみ)
+    buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:not(:disabled)').forEach(checkbox => checkbox.checked = false);
+     // disabledの敷地とA棟はチェック状態を維持
+    document.getElementById('addBuilding-site').checked = true;
+    document.getElementById('addBuilding-A').checked = true;
+
 
     // 建物が1つでも新規追加/更新された場合、またはプロジェクト情報が更新された場合は詳細タブに移動
     if (wasAnyBuildingAddedOrUpdated || projectInfoCreatedOrUpdated) {
       console.log('[handleAddProjectAndBuilding] Switching to detail tab due to changes.');
       switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
     } else {
-      console.log('[handleAddProjectAndBuilding] No changes made, potentially staying on info tab.');
-       // 既存の建物のみ選択してボタンを押した場合など
-       // この場合も詳細タブに移動した方が親切かもしれない
-       switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); 
+      console.log('[handleAddProjectAndBuilding] No changes made, switching to detail tab anyway.');
+      switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); 
     }
+    console.log("--- Add Building End (Success) ---");
 
   } catch (error) {
-    console.error("Error adding project/building:", error);
-    alert("情報の保存中にエラーが発生しました: " + error.message);
+    // ★★★ 関数全体の予期せぬエラー ★★★
+    console.error("[handleAddProjectAndBuilding] <<<< UNEXPECTED FUNCTION ERROR >>>> :", error);
+    alert(`処理中に予期せぬエラーが発生しました: ${error.message}`);
+    console.log("--- Add Building End (Error) ---");
   }
 }
 
