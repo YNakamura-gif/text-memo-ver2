@@ -1301,6 +1301,7 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
       alert("プロジェクトIDが見つかりません。処理を中断します。");
       return;
     }
+    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings...`); // ★ 追加ログ
     const buildingAddPromises = buildingsToAdd.map(async (building) => {
       const buildingRef = getBuildingsRef(currentProjectId).child(building.id);
       const buildingSnapshot = await buildingRef.once('value');
@@ -1323,11 +1324,24 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
       }
     });
 
-    const results = await Promise.all(buildingAddPromises);
-    const wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
+    let wasAnyBuildingAddedOrUpdated = false;
+    try { // ★ Promise.all を try...catch で囲む
+        console.log("[handleAddProjectAndBuilding] Awaiting Promise.all for building saves..."); // ★ 追加ログ
+        const results = await Promise.all(buildingAddPromises);
+        console.log("[handleAddProjectAndBuilding] Promise.all completed. Results:", results); // ★ 追加ログ
+        wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
+        console.log(`[handleAddProjectAndBuilding] wasAnyBuildingAddedOrUpdated: ${wasAnyBuildingAddedOrUpdated}`); // ★ 追加ログ
+    } catch (saveError) {
+        // ★★★ 保存処理全体のエラーを捕捉 ★★★
+        console.error("[handleAddProjectAndBuilding] <<<< ERROR during Promise.all >>>> Error saving/updating buildings:", saveError);
+        alert(`建物の保存中にエラーが発生しました: ${saveError.message}`);
+        // UI更新に進まずに終了する、またはエラー状態を示すUI更新を行う
+        return; // ★ エラー発生時はここで処理を中断
+    }
 
     // --- 4. UI更新 --- 
-    console.log(`[handleAddProjectAndBuilding] Updating UI. Project: ${currentProjectId}, Building to select: ${lastCheckedBuildingId}`);
+    // ★ UI更新直前の状態をログ出力
+    console.log(`[handleAddProjectAndBuilding] Preparing to update UI. Project: ${currentProjectId}, Building to select: ${lastCheckedBuildingId}`);
     // 建物セレクタを更新し、最後にチェックされた建物を表示・選択状態にする
     await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, lastCheckedBuildingId);
 
