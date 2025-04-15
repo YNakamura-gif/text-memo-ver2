@@ -590,11 +590,17 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
   buildingSelectElement.disabled = true;
 
   try {
+    console.log(`[updateBuildingSelectorForProject] Attempting to fetch buildings from Firebase for ${projectId}`); // ★ 追加ログ
     const snapshot = await buildingsRef.once('value');
+    console.log(`[updateBuildingSelectorForProject] Firebase snapshot received. Exists: ${snapshot.exists()}`); // ★ 追加ログ
     const buildingsData = snapshot.val();
+    console.log(`[updateBuildingSelectorForProject] Raw buildingsData:`, buildingsData); // ★ 追加ログ: 取得した生データを表示
+
     const buildingEntries = buildingsData ? Object.entries(buildingsData) : [];
+    console.log(`[updateBuildingSelectorForProject] Processed buildingEntries count: ${buildingEntries.length}`); // ★ 追加ログ
 
     if (buildingEntries.length > 0) {
+      console.log('[updateBuildingSelectorForProject] Building entries found. Populating selector...'); // ★ 追加ログ
       buildingSelectElement.innerHTML = '<option value="">-- 建物を選択 --</option>';
       // ★ 敷地(site)を常に最初に表示するためのソートロジック
       buildingEntries.sort(([idA, dataA], [idB, dataB]) => {
@@ -605,48 +611,48 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
           const nameB = dataB.name || '';
           return nameA.localeCompare(nameB, 'ja');
       });
+      console.log('[updateBuildingSelectorForProject] Buildings sorted.'); // ★ 追加ログ
       
       buildingEntries.forEach(([buildingId, buildingData]) => {
+        // console.log(`[updateBuildingSelectorForProject] Adding option: ID=${buildingId}, Name=${buildingData?.name}`); // ★ 必要なら追加
         const option = document.createElement('option');
         option.value = buildingId;
         option.textContent = buildingData.name || `建物 (${buildingId})`;
         buildingSelectElement.appendChild(option);
       });
       buildingSelectElement.disabled = false;
+      console.log('[updateBuildingSelectorForProject] Selector populated and enabled.'); // ★ 追加ログ
 
       // Determine which building to select
       let selectedBuildingId = null;
+      console.log(`[updateBuildingSelectorForProject] Determining selection. ID to select hint: ${buildingIdToSelect}, Current ID: ${currentBuildingId}, Last used: ${lastUsedBuilding}`); // ★ 追加ログ
       if (buildingIdToSelect && buildingSelectElement.querySelector(`option[value="${buildingIdToSelect}"]`)) {
-          // 引数で指定されたIDが存在すればそれを選択
           selectedBuildingId = buildingIdToSelect;
           console.log(`[updateBuildingSelectorForProject] Selecting specified building: ${selectedBuildingId}`);
       } else if (currentBuildingId && buildingSelectElement.querySelector(`option[value="${currentBuildingId}"]`)) {
-          // 現在の建物IDが有効ならそれを維持
           selectedBuildingId = currentBuildingId;
           console.log(`[updateBuildingSelectorForProject] Maintaining current building: ${selectedBuildingId}`);
       } else if (lastUsedBuilding && buildingSelectElement.querySelector(`option[value="${lastUsedBuilding}"]`)) {
-          // 最後に使用した建物IDが有効ならそれを選択
           selectedBuildingId = lastUsedBuilding;
           console.log(`[updateBuildingSelectorForProject] Restoring last used building: ${selectedBuildingId}`);
       } else {
-          // どれも有効でない場合は、リストの最初の建物（通常は敷地）を選択
           const firstOption = buildingSelectElement.querySelector('option:not([value=""])');
           if (firstOption) {
               selectedBuildingId = firstOption.value;
               console.log(`[updateBuildingSelectorForProject] Selecting first available building: ${selectedBuildingId}`);
           }
       }
+      console.log(`[updateBuildingSelectorForProject] Final selectedBuildingId: ${selectedBuildingId}`); // ★ 追加ログ
       
       if (selectedBuildingId) {
           buildingSelectElement.value = selectedBuildingId;
           currentBuildingId = selectedBuildingId;
-          lastUsedBuilding = selectedBuildingId; // Update last used
+          lastUsedBuilding = selectedBuildingId; 
           localStorage.setItem('lastBuildingId', currentBuildingId);
           activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
-          // 選択された建物に対応する劣化情報を取得・表示
           await fetchAndRenderDeteriorations(projectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
       } else {
-          // 選択できる建物がない場合
+          console.log('[updateBuildingSelectorForProject] No building could be selected.'); // ★ 追加ログ
           activeBuildingNameSpanElement.textContent = '未選択';
           renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
           updateNextIdDisplay(projectId, null, nextIdDisplayElement);
@@ -654,6 +660,7 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
       }
       
     } else {
+      console.log('[updateBuildingSelectorForProject] No building entries found after fetch.'); // ★ 追加ログ
       // 建物データがない場合
       buildingSelectElement.innerHTML = '<option value="">-- 建物未登録 --</option>';
       activeBuildingNameSpanElement.textContent = '未登録';
@@ -662,7 +669,8 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
       currentBuildingId = null;
     }
   } catch (error) {
-    console.error(`Error fetching buildings for project ${projectId}:`, error);
+    // ★★★ エラーログを強化 ★★★
+    console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching or processing buildings for project ${projectId}:`, error);
     buildingSelectElement.innerHTML = '<option value="">読み込みエラー</option>';
     activeBuildingNameSpanElement.textContent = 'エラー';
     renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
