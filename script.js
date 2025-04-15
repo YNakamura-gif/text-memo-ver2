@@ -1274,26 +1274,35 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
     }
 
     // --- 2. 建物の追加処理 --- 
-    const buildingsToAdd = [];
-    let lastCheckedBuildingId = null; // 最後に選択された建物のID (UI更新用)
-    const allBuildingTypeOrder = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"]; // UI選択用に順序を保持
+    const buildingsToAdd = [
+        { id: "site", name: "敷地" },      // ★ 必ず追加
+        { id: "buildingA", name: "A棟" } // ★ 必ず追加
+    ];
+    let lastCheckedBuildingId = "buildingA"; // デフォルトはA棟を選択状態にする
+    const allBuildingTypeOrder = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"];
 
-    checkedBuildingCheckboxes.forEach(checkbox => {
+    // チェックされたB棟以降の建物を取得 (disabledでないもののみ)
+    const checkedOtherBuildingCheckboxes = buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:checked:not(:disabled)'); 
+
+    checkedOtherBuildingCheckboxes.forEach(checkbox => {
         const buildingId = checkbox.value;
-        // ラベルから建物の表示名を取得 (例: <label for="addBuilding-A">A棟</label>)
-        const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
-        const buildingName = label ? label.textContent.trim() : buildingId; // ラベルが見つからなければIDを名前とする
-        buildingsToAdd.push({ id: buildingId, name: buildingName });
+        // すでに追加リストに含まれていないか確認（念のため）
+        if (!buildingsToAdd.some(b => b.id === buildingId)) {
+            const label = buildingCheckboxContainer.querySelector(`label[for="${checkbox.id}"]`);
+            const buildingName = label ? label.textContent.trim() : buildingId; 
+            buildingsToAdd.push({ id: buildingId, name: buildingName });
+        }
     });
     
-    // 選択された建物を定義済みの順序でソート（敷地が先、A,B,C... の順）
+    // 選択された建物を定義済みの順序でソート
     buildingsToAdd.sort((a, b) => allBuildingTypeOrder.indexOf(a.id) - allBuildingTypeOrder.indexOf(b.id));
     
-    if (buildingsToAdd.length > 0) {
-        lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id; // 最後にチェックされた（ソート後）ID
-    }
+    // UIで最後に選択状態にする建物を決定（敷地/A棟のみの場合はA棟、それ以外もチェックされていれば最後の棟）
+    if (buildingsToAdd.length > 2) { // 敷地、A棟以外にチェックがある場合
+        lastCheckedBuildingId = buildingsToAdd[buildingsToAdd.length - 1].id; 
+    } // それ以外（敷地、A棟のみ）の場合は初期値 "buildingA" のまま
 
-    console.log(`[handleAddProjectAndBuilding] Buildings to add/check:`, buildingsToAdd.map(b => b.id));
+    console.log(`[handleAddProjectAndBuilding] Buildings to add/check (including mandatory):`, buildingsToAdd.map(b => b.id));
 
     // --- 3. Firebaseへの建物データ保存 (並列処理) ---
     if (!currentProjectId) {
