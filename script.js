@@ -1193,8 +1193,8 @@ document.addEventListener('DOMContentLoaded', initializeApp);
 async function handleAddProjectAndBuilding(siteNameInput, buildingSelectPresetElement, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, infoTabBtn, detailTabBtn, infoTab, detailTab) {
   console.log("[handleAddProjectAndBuilding] Triggered.");
   const siteName = siteNameInput.value.trim();
-  const selectedValue = buildingSelectPresetElement.value; // ★ 変更: 選択されたvalueを取得
-  const selectedText = buildingSelectPresetElement.options[buildingSelectPresetElement.selectedIndex].text; // 表示テキスト
+  const selectedValue = buildingSelectPresetElement.value; 
+  const selectedText = buildingSelectPresetElement.options[buildingSelectPresetElement.selectedIndex].text;
 
   if (!siteName || !selectedValue) {
     alert("現場名と追加する建物を選択してください。");
@@ -1206,42 +1206,63 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingSelectPresetEl
     alert("現場名が無効です。");
     return;
   }
+  console.log(`[handleAddProjectAndBuilding] Generated Project ID: ${projectId}`);
 
+  // ★ currentProjectId をここで設定し、localStorageにも保存
   currentProjectId = projectId;
   localStorage.setItem('lastProjectId', currentProjectId);
   const projectInfoRef = getProjectInfoRef(projectId);
 
   try {
     // --- 1. プロジェクト情報の設定 (初回のみ) ---
+    console.log(`[handleAddProjectAndBuilding] Checking/Creating project info for ${projectId}...`);
     const projectInfoSnapshot = await projectInfoRef.once('value');
+    let projectInfoCreatedOrUpdated = false; 
     if (!projectInfoSnapshot.exists()) {
+      console.log(`[handleAddProjectAndBuilding] Project info for ${projectId} does not exist. Creating...`);
       await projectInfoRef.set({
         siteName: siteName,
         createdAt: firebase.database.ServerValue.TIMESTAMP
       });
-      console.log("[handleAddProjectAndBuilding] Project info saved.");
-      const updatedProjectNames = await populateProjectDataList(projectDataListElement); 
-      updateDatalistWithOptions(updatedProjectNames, projectDataListElement); 
+      projectInfoCreatedOrUpdated = true;
+      console.log("[handleAddProjectAndBuilding] Project info saved successfully.");
+      // プロジェクトリストを更新
+      const updatedProjectNames = await populateProjectDataList(projectDataListElement);
+      updateDatalistWithOptions(updatedProjectNames, projectDataListElement);
     } else {
-      console.log("[handleAddProjectAndBuilding] Project info already exists.");
+      // 既存プロジェクトでもsiteNameが異なれば更新 (名前変更対応)
+      const existingSiteName = projectInfoSnapshot.val().siteName;
+      if (existingSiteName !== siteName) {
+          console.log(`[handleAddProjectAndBuilding] Updating existing project ${projectId} siteName from '${existingSiteName}' to '${siteName}'.`);
+          await projectInfoRef.update({ siteName: siteName });
+          projectInfoCreatedOrUpdated = true; // 名前変更も更新とみなす
+          // プロジェクトリストを更新 (名前が変わった可能性があるため)
+          const updatedProjectNames = await populateProjectDataList(projectDataListElement);
+          updateDatalistWithOptions(updatedProjectNames, projectDataListElement);
+      } else {
+         console.log(`[handleAddProjectAndBuilding] Project info for ${projectId} already exists and name is current.`);
+      }
     }
 
     // --- 2. 建物の追加処理 --- 
-    const buildingsToAdd = []; // 追加対象の建物IDリスト
-    let lastAddedBuildingId = null; // 一括追加の場合、最後に選択する建物ID
+    const buildingsToAdd = []; 
+    let buildingIdToSelectAfterAdd = null; // ★ UI更新時に選択するID
 
     if (selectedValue.startsWith("upto")) {
-      // --- 一括追加 --- 
-      const targetBuildingLetter = selectedValue.replace("upto", ""); // 例: "B", "C", ...
+      // ...(一括追加の buildingsToAdd 生成ロジックは変更なし)...
+      const targetBuildingLetter = selectedValue.replace("upto", ""); 
       const allBuildingTypes = ["site", "buildingA", "buildingB", "buildingC", "buildingD", "buildingE", "buildingF", "buildingG", "buildingH", "buildingI"];
       const targetIndex = allBuildingTypes.findIndex(id => id === `building${targetBuildingLetter}`);
       
       if (targetIndex !== -1) {
           for (let i = 0; i <= targetIndex; i++) {
-              buildingsToAdd.push(allBuildingTypes[i]);
+              buildingsToAdd.push({ 
+                  id: allBuildingTypes[i],
+                  name: allBuildingTypes[i] === 'site' ? '敷地' : `${allBuildingTypes[i].replace('building', '')}棟` 
+              });
           }
-          lastAddedBuildingId = allBuildingTypes[targetIndex]; // 最後に追加された棟を選択状態にする
-          console.log(`[handleAddProjectAndBuilding] Bulk adding buildings up to ${targetBuildingLetter}:`, buildingsToAdd);
+          buildingIdToSelectAfterAdd = allBuildingTypes[targetIndex]; 
+          console.log(`[handleAddProjectAndBuilding] Bulk adding buildings up to ${targetBuildingLetter}:`, buildingsToAdd.map(b => b.id));
       } else {
           console.error("[handleAddProjectAndBuilding] Invalid 'upto' value:", selectedValue);
           alert("無効な建物指定です。");
@@ -1250,10 +1271,10 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingSelectPresetEl
     } else {
       // --- 単一追加 --- 
       const buildingId = selectedValue; // "site" or "buildingA"
-      const buildingName = selectedText;
+      const buildingName = selectedText; 
       if (buildingId) {
-          buildingsToAdd.push(buildingId);
-          lastAddedBuildingId = buildingId; // その棟を選択状態にする
+          buildingsToAdd.push({ id: buildingId, name: buildingName });
+          buildingIdToSelectAfterAdd = buildingId;
           console.log(`[handleAddProjectAndBuilding] Single adding building: ${buildingId}`);
       } else {
           console.error("[handleAddProjectAndBuilding] Invalid single building value:", selectedValue);
@@ -1263,44 +1284,56 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingSelectPresetEl
     }
     
     // --- 3. Firebaseへの建物データ保存 (並列処理) ---
-    const buildingAddPromises = buildingsToAdd.map(async (buildingId) => {
-        const buildingRef = getBuildingsRef(projectId).child(buildingId);
+    console.log(`[handleAddProjectAndBuilding] Proceeding to add buildings for project ${currentProjectId}:`, buildingsToAdd.map(b => b.id));
+    if (!currentProjectId) {
+         console.error("[handleAddProjectAndBuilding] currentProjectId is null before adding buildings!");
+         alert("プロジェクトIDが見つかりません。処理を中断します。");
+         return;
+    }
+    const buildingAddPromises = buildingsToAdd.map(async (building) => {
+        const buildingRef = getBuildingsRef(currentProjectId).child(building.id);
         const buildingSnapshot = await buildingRef.once('value');
         if (!buildingSnapshot.exists()) {
-            const buildingName = buildingId === 'site' ? '敷地' : `${buildingId.replace('building', '')}棟`; // 名前を生成
             await buildingRef.set({
-                name: buildingName,
+                name: building.name,
                 createdAt: firebase.database.ServerValue.TIMESTAMP
             });
-            console.log(`[handleAddProjectAndBuilding] Building ${buildingId} saved.`);
+            console.log(`[handleAddProjectAndBuilding] Building ${building.id} saved.`);
             return true; // 新規追加
         } else {
-            console.log(`[handleAddProjectAndBuilding] Building ${buildingId} already exists.`);
-            return false; // 既存
+            // 既存でも名前が違ったら更新する (例: ID 'buildingA' でも名前が 'A' や 'Ａ棟' になっている場合)
+            const existingBuildingName = buildingSnapshot.val().name;
+            if (existingBuildingName !== building.name) {
+                console.log(`[handleAddProjectAndBuilding] Updating existing building ${building.id} name from '${existingBuildingName}' to '${building.name}'.`);
+                await buildingRef.update({ name: building.name });
+                return true; // 更新も変更ありとみなす
+            }
+            console.log(`[handleAddProjectAndBuilding] Building ${building.id} already exists and name is current.`);
+            return false; // 既存で変更なし
         }
     });
     
     const results = await Promise.all(buildingAddPromises);
-    const wasAnyBuildingAdded = results.some(added => added === true);
+    const wasAnyBuildingAddedOrUpdated = results.some(changed => changed === true);
 
     // --- 4. UI更新 --- 
+    console.log(`[handleAddProjectAndBuilding] Updating UI. Project: ${currentProjectId}, Building to select: ${buildingIdToSelectAfterAdd}`);
     // 建物セレクタを更新し、最後に追加/選択された建物を表示・選択状態にする
-    await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, lastAddedBuildingId);
+    await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput, buildingIdToSelectAfterAdd);
 
-    activeProjectNameSpanElement.textContent = siteName;
+    activeProjectNameSpanElement.textContent = siteName; 
     buildingSelectElement.disabled = false;
 
-    // 建物が1つでも新規追加された場合のみ詳細タブに移動（既存のみの場合は移動しない）
-    if (wasAnyBuildingAdded) {
+    // 建物が1つでも新規追加/更新された場合、またはプロジェクト情報が更新された場合は詳細タブに移動
+    if (wasAnyBuildingAddedOrUpdated || projectInfoCreatedOrUpdated) {
+      console.log('[handleAddProjectAndBuilding] Switching to detail tab due to changes.');
       switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
     } else {
-        // 既存の建物のみが選択された場合（例：「敷地」だけ追加しようとしたが既にあった）
-        // 必要であればユーザーに通知
-        // alert("選択された建物はすでに追加されています。");
-         switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); // 既存でも詳細タブに移動する
+       console.log('[handleAddProjectAndBuilding] No changes made, staying on info tab or current tab.');
+       // 既存の建物のみが選択された場合など。現状維持で良いか、あるいは詳細タブへ強制移動するか検討。
+       // 現状はタブ移動しない
+       // switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab); // 強制移動する場合
     }
-
-    // fetchAndRenderDeteriorations は updateBuildingSelectorForProject 内で呼び出される想定
 
   } catch (error) {
     console.error("Error adding project/building:", error);
