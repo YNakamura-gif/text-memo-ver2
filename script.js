@@ -613,12 +613,18 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
       });
       console.log('[updateBuildingSelectorForProject] Buildings sorted.'); // ★ 追加ログ
       
-      buildingEntries.forEach(([buildingId, buildingData]) => {
-        // console.log(`[updateBuildingSelectorForProject] Adding option: ID=${buildingId}, Name=${buildingData?.name}`); // ★ 必要なら追加
-        const option = document.createElement('option');
-        option.value = buildingId;
-        option.textContent = buildingData.name || `建物 (${buildingId})`;
-        buildingSelectElement.appendChild(option);
+      buildingEntries.forEach(([buildingId, buildingData], index) => { // ★ index を追加
+        try { // ★ ループ内に try を追加
+          // console.log(`[updateBuildingSelectorForProject] Adding option: ID=${buildingId}, Name=${buildingData?.name}`); // ★ 必要なら追加
+          const option = document.createElement('option');
+          option.value = buildingId;
+          // ★ 修正: buildingDataが存在しない、またはnameがない場合のフォールバックを強化
+          option.textContent = buildingData?.name || `建物 (${buildingId})`; 
+          buildingSelectElement.appendChild(option);
+        } catch(loopError) { // ★ ループ内エラーを捕捉
+            console.error(`[updateBuildingSelectorForProject] <<<< ERROR in loop >>>> Error adding option for building index ${index}, ID=${buildingId}:`, loopError);
+            // ★ エラーが発生してもループは継続するが、問題があったことをログに残す
+        }
       });
       buildingSelectElement.disabled = false;
       console.log('[updateBuildingSelectorForProject] Selector populated and enabled.'); // ★ 追加ログ
