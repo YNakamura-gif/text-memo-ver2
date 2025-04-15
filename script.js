@@ -1309,12 +1309,15 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
     console.log(`[handleAddProjectAndBuilding] Buildings to add/check (including mandatory):`, buildingsToAdd.map(b => b.id));
 
     // --- 3. Firebaseへの建物データ保存 (並列処理) ---
+    // ★★★ currentProjectId の値を確認するログを追加 ★★★
+    console.log(`[handleAddProjectAndBuilding] Checking currentProjectId before Firebase saves: ${currentProjectId}`);
+    // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★
     if (!currentProjectId) {
       console.error("[handleAddProjectAndBuilding] currentProjectId is null before adding buildings!");
       alert("プロジェクトIDが見つかりません。処理を中断します。");
       return;
     }
-    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings...`); // ★ 追加ログ
+    console.log(`[handleAddProjectAndBuilding] Starting Firebase save promises for ${buildingsToAdd.length} buildings...`); 
     const buildingAddPromises = buildingsToAdd.map(async (building) => {
       const buildingRef = getBuildingsRef(currentProjectId).child(building.id);
       const buildingSnapshot = await buildingRef.once('value');
