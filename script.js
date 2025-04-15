@@ -1808,3 +1808,88 @@ async function updatePhotoCounterIfNeeded(projectId, buildingId, userEnteredPhot
     // どの道、通常登録ではユーザーが入力した値を優先して返す
     return userEnteredPhotoNumber;
 }
+
+// ======================================================================
+// 15. Data Loading - Deterioration List (Modified)
+// ======================================================================
+// ★ 移動: setupDeteriorationListener 関数定義をここに移動
+function setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  const listenerKey = `${projectId}_${buildingId}`;
+  console.log(`[setupDeteriorationListener] Setting up listener for ${listenerKey}`); // ★ 追加ログ
+  
+  // Detach previous listener for this specific building if it exists
+  if (deteriorationListeners[listenerKey]) {
+    console.log(`[setupDeteriorationListener] Detaching existing listener for ${listenerKey}`);
+    try {
+        deteriorationListeners[listenerKey].ref.off('value', deteriorationListeners[listenerKey].callback);
+    } catch (detachError) {
+        console.warn(`[setupDeteriorationListener] Error detaching listener for ${listenerKey}:`, detachError);
+    }
+    delete deteriorationListeners[listenerKey];
+  }
+
+  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+
+  // Define the callback for the listener
+  const listenerCallback = (snapshot) => {
+    console.log(`[Deterioration Listener Callback] Data received for ${listenerKey}`); // ★ 追加ログ
+    try { // ★ コールバック内に try...catch を追加
+        const data = snapshot.val() || {};
+        // console.log(`[Deterioration Listener Callback] Raw data for ${listenerKey}:`, data); // ★ 必要なら追加
+        deteriorationData[buildingId] = data; // Update local cache
+        const records = Object.entries(data).map(([id, deterioration]) => ({
+          id,
+          ...deterioration
+        })).sort((a, b) => b.number - a.number); 
+        console.log(`[Deterioration Listener Callback] Rendering ${records.length} records for ${listenerKey}`); // ★ 追加ログ
+        renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+        console.log(`[Deterioration Listener Callback] Finished rendering for ${listenerKey}`); // ★ 追加ログ
+    } catch (callbackError) {
+        console.error(`[Deterioration Listener Callback] <<<< ERROR >>>> Error processing data or rendering table for ${listenerKey}:`, callbackError);
+        // エラー時にもテーブルをクリアまたはエラー表示する
+        renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput); 
+        deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化リストの表示中にエラーが発生しました。</td></tr>';
+    }
+  };
+
+  // Attach the new listener and store it
+  console.log(`[setupDeteriorationListener] Attaching new listener for ${listenerKey}`); // ★ 追加ログ
+  deteriorationRef.on('value', listenerCallback, (error) => {
+    // ★★★ リスナー自体のエラーハンドリング ★★★
+    console.error(`[setupDeteriorationListener] <<<< LISTENER ERROR >>>> Error attaching or receiving data for ${listenerKey}:`, error);
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput); 
+    deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">データのリアルタイム受信に失敗しました。</td></tr>';
+     // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+  });
+
+  deteriorationListeners[listenerKey] = { ref: deteriorationRef, callback: listenerCallback };
+  console.log(`[setupDeteriorationListener] Listener attached successfully for ${listenerKey}`); // ★ 追加ログ
+}
+
+// ★ 修正: fetchAndRenderDeteriorations にログを追加
+async function fetchAndRenderDeteriorations(projectId, buildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput) {
+  console.log(`--- fetchAndRenderDeteriorations START for ${projectId}/${buildingId} ---`); // ★ 追加ログ
+  if (!projectId || !buildingId) {
+    console.warn("[fetchAndRenderDeteriorations] Missing projectId or buildingId. Clearing table.");
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput); 
+    updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement); 
+    console.log(`--- fetchAndRenderDeteriorations END (Missing IDs) ---`); // ★ 追加ログ
+    return;
+  }
+  console.log(`[fetchAndRenderDeteriorations] Setting up listener and updating next ID for ${projectId}/${buildingId}`);
+  try { // ★ 追加: 念のため try...catch
+      // Setup real-time listener for deterioration data
+      setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+      console.log(`[fetchAndRenderDeteriorations] Listener setup initiated for ${projectId}/${buildingId}`); // ★ 追加ログ
+      
+      // Update the next ID display based on the counter
+      await updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+      console.log(`[fetchAndRenderDeteriorations] Next ID display updated for ${projectId}/${buildingId}`); // ★ 追加ログ
+  } catch (error) {
+      console.error(`[fetchAndRenderDeteriorations] <<<< ERROR >>>> Error during setup for ${projectId}/${buildingId}:`, error);
+      // エラー発生時のUI処理（例：テーブルをクリア）
+      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, editPhotoNumberInput);
+      deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化情報の準備中にエラーが発生しました。</td></tr>';
+  }
+  console.log(`--- fetchAndRenderDeteriorations END for ${projectId}/${buildingId} ---`); // ★ 追加ログ
+}
