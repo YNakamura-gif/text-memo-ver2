@@ -155,25 +155,25 @@ function parseCsv(csvText, expectedColumns) {
           const floor = values[0]?.trim() || '';
           const value = values[1]?.trim();
           const reading = values[2]?.trim();
-          return value ? { floor: floor, value: value, reading: reading || '' } : null;
-        }
+      return value ? { floor: floor, value: value, reading: reading || '' } : null;
+    }
         else if (expectedColumns === 3 && header[0]?.trim() === '劣化名') { // ヘッダーで劣化項目CSVかを判断
-          const name = values[0]?.trim();
-          const code = values[1]?.trim();
-          const reading = values[2]?.trim();
-          return name ? { name: name, code: code || '', reading: reading || '' } : null;
-        } else {
-          console.warn(`Unsupported expectedColumns or unknown CSV format: ${expectedColumns}, Header: ${header[0]}`);
+      const name = values[0]?.trim();
+      const code = values[1]?.trim();
+      const reading = values[2]?.trim();
+      return name ? { name: name, code: code || '', reading: reading || '' } : null;
+    } else {
+      console.warn(`Unsupported expectedColumns or unknown CSV format: ${expectedColumns}, Header: ${header[0]}`);
           return null;
         }
     } catch (e) {
         console.error(`Error parsing CSV line ${index + 1}: ${line}`, e);
-        return null;
+      return null;
     }
   }).filter(item => item !== null);
 }
 
-async function fetchAndParseCsv(filePath, expectedColumns) {
+async function fetchAndParseCsv(filePath, expectedColumns) { 
   console.log(`Fetching CSV from: ${filePath}`);
   try {
     const response = await fetch(filePath);
@@ -203,7 +203,7 @@ async function fetchAndParseCsv(filePath, expectedColumns) {
     }
     // console.log(`[fetchAndParseCsv] Decoded text (first 200 chars):`, text.substring(0, 200));
     // BOM check is integrated into parseCsv header processing now
-    return parseCsv(text, expectedColumns);
+    return parseCsv(text, expectedColumns); 
   } catch (error) {
     console.error(`Error fetching or parsing CSV ${filePath}:`, error);
     return [];
@@ -237,32 +237,32 @@ function generateLocationPredictions(inputText) {
     const inputTextHankaku = zenkakuToHankaku(inputTextTrimmed);
     // console.log(`[generateLocationPredictions] Input after Hankaku: \"${inputTextHankaku}\"`);
 
-    let floorSearchTerm = null;
-    let roomSearchTermRaw = inputTextHankaku;
-    let roomSearchTermHiragana = '';
+  let floorSearchTerm = null;
+  let roomSearchTermRaw = inputTextHankaku;
+  let roomSearchTermHiragana = '';
 
     // シンプルな階数プレフィックス抽出 (例: 数字 or 英字1-3文字 + F/f(任意))
     const floorMatch = roomSearchTermRaw.match(/^([a-zA-Z0-9]{1,3}[fF]?)(.*)$/);
 
     if (floorMatch && floorMatch[1]) {
         // 抽出したプレフィックスを階数検索タームとする
-        floorSearchTerm = floorMatch[1].toLowerCase();
+    floorSearchTerm = floorMatch[1].toLowerCase();
         // 残りを部屋名検索タームとする（先頭のスペースは除去）
         roomSearchTermRaw = floorMatch[2] ? floorMatch[2].trim() : '';
         // console.log(`[generateLocationPredictions] Floor detected: '${floorSearchTerm}', Room term: '${roomSearchTermRaw}'`);
-    } else {
+  } else {
         // 階数プレフィックスが見つからなければ、入力全体を部屋名検索タームとする
         roomSearchTermRaw = inputTextHankaku;
         // console.log(`[generateLocationPredictions] No floor prefix detected, treating as room term: '${roomSearchTermRaw}'`);
-    }
+  }
 
-    roomSearchTermHiragana = katakanaToHiragana(roomSearchTermRaw.toLowerCase());
+  roomSearchTermHiragana = katakanaToHiragana(roomSearchTermRaw.toLowerCase());
 
     // 検索タームがなければ空配列を返す
     if (!floorSearchTerm && !roomSearchTermHiragana) {
       // console.log("[generateLocationPredictions] No valid search term after processing.");
       return [];
-    }
+  }
 
     let candidateFloors = new Set();
     let candidateRooms = new Set();
@@ -273,7 +273,7 @@ function generateLocationPredictions(inputText) {
         const itemFloorLower = itemFloor.toLowerCase();
         const itemValue = item.value || ''; // 部屋名
         const itemValueLower = itemValue.toLowerCase();
-        const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
+      const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
         const combinedLocation = `${itemFloor} ${itemValue}`.trim(); // 組み合わせた文字列
 
         // --- 候補の収集 ---
@@ -364,7 +364,7 @@ function generateDegradationPredictions(inputText) {
     if (!item || !item.name) return; // Skip invalid items
 
     const itemNameLower = item.name.toLowerCase();
-    const itemReadingRaw = item.reading || '';
+    const itemReadingRaw = item.reading || ''; 
     const itemCodeHiragana = katakanaToHiragana(item.code?.toLowerCase() || '');
 
     // 1. Reading prefix match
@@ -385,7 +385,7 @@ function generateDegradationPredictions(inputText) {
     }
 
     // 3. Two-char code exact match (only if not matched by reading or name)
-    if (!isReadingPrefixMatch && !itemNameLower.includes(searchTermLower) &&
+    if (!isReadingPrefixMatch && !itemNameLower.includes(searchTermLower) && 
         isTwoCharInput && itemCodeHiragana && itemCodeHiragana === searchTermHiragana) {
       codeMatches.add(item.name);
     }
@@ -436,12 +436,12 @@ function showPredictions(inputElement, predictionListElement, predictions) {
           const nextElement = document.getElementById(nextFocusElementId);
           if (nextElement) {
             // Use setTimeout to ensure focus happens after other event processing
-            setTimeout(() => {
+          setTimeout(() => {
                  nextElement.focus();
                  // For buttons, sometimes triggering click is also useful
                  // if(nextElement.tagName === 'BUTTON') nextElement.click();
-            }, 0);
-          }
+          }, 0);
+        }
         }
       };
 
@@ -460,20 +460,20 @@ function showPredictions(inputElement, predictionListElement, predictions) {
 
 function hidePredictions(predictionListElement) {
   if (predictionListElement) {
-      predictionListElement.classList.add('hidden');
+  predictionListElement.classList.add('hidden');
   }
 }
 
 function setupPredictionListeners(inputElement, predictionListElement, generatorFn, nextElementId) {
   if (!inputElement || !predictionListElement) {
-    console.warn("setupPredictionListeners: Input or List element not found.");
-    return;
+      console.warn("setupPredictionListeners: Input or List element not found.");
+      return;
   }
 
   inputElement.addEventListener('input', () => {
     const inputText = inputElement.value;
-    const predictions = generatorFn(inputText);
-    showPredictions(inputElement, predictionListElement, predictions);
+        const predictions = generatorFn(inputText);
+        showPredictions(inputElement, predictionListElement, predictions);
   });
 
   // Hide predictions on blur, but with a delay to allow clicking on prediction items
@@ -488,7 +488,7 @@ function setupPredictionListeners(inputElement, predictionListElement, generator
     if (inputText.trim()) {
       const predictions = generatorFn(inputText);
       if (predictions.length > 0) {
-        showPredictions(inputElement, predictionListElement, predictions);
+          showPredictions(inputElement, predictionListElement, predictions);
       }
     }
   });
@@ -541,7 +541,7 @@ async function updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement) 
     nextIdDisplayElement.textContent = (currentCounter + 1).toString();
   } catch (error) {
     console.error("Error fetching counter for next ID display:", error);
-    nextIdDisplayElement.textContent = '-';
+    nextIdDisplayElement.textContent = '-'; 
   }
 }
 
@@ -647,12 +647,12 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
           return nameA.localeCompare(nameB, 'ja');
       });
       // console.log('[updateBuildingSelectorForProject] Buildings sorted.');
-
+      
       buildingEntries.forEach(([buildingId, buildingData]) => {
         try {
           const option = document.createElement('option');
           option.value = buildingId;
-          option.textContent = buildingData?.name || `建物 (${buildingId})`;
+          option.textContent = buildingData?.name || `建物 (${buildingId})`; 
           buildingSelectElement.appendChild(option);
         } catch(loopError) {
             console.error(`[updateBuildingSelectorForProject] Error adding option for building ID=${buildingId}:`, loopError);
@@ -678,20 +678,20 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
           if (siteOption) {
               selectedBuildingId = 'site';
               // console.log('[updateBuildingSelectorForProject] Selecting "site" as fallback.');
-          } else {
-              const firstOption = buildingSelectElement.querySelector('option:not([value=""])');
-              if (firstOption) {
-                  selectedBuildingId = firstOption.value;
+      } else {
+          const firstOption = buildingSelectElement.querySelector('option:not([value=""])');
+          if (firstOption) {
+              selectedBuildingId = firstOption.value;
                   // console.log(`[updateBuildingSelectorForProject] Selecting first available building: ${selectedBuildingId}`);
-              }
           }
       }
+      }
       // console.log(`[updateBuildingSelectorForProject] Final selectedBuildingId: ${selectedBuildingId}`);
-
+      
       if (selectedBuildingId) {
           buildingSelectElement.value = selectedBuildingId;
           currentBuildingId = selectedBuildingId;
-          lastUsedBuilding = selectedBuildingId;
+          lastUsedBuilding = selectedBuildingId; 
           localStorage.setItem('lastBuildingId', currentBuildingId);
           activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
           // ★ 修正: fetchAndRenderDeteriorations 呼び出し修正
@@ -704,7 +704,7 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
           updateNextIdDisplay(projectId, null, nextIdDisplayElement);
           currentBuildingId = null;
       }
-
+      
     } else {
       console.log('[updateBuildingSelectorForProject] No building entries found after fetch.');
       buildingSelectElement.innerHTML = '<option value="">-- 建物未登録 --</option>';
@@ -732,7 +732,7 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
 // ======================================================================
 // 9. Basic Info & Project List Management
 // ======================================================================
-async function loadBasicInfo(projectId, siteNameInput) {
+async function loadBasicInfo(projectId, siteNameInput) { 
   if (!siteNameInput) return;
   console.log(`[loadBasicInfo] Loading basic info for project ID: ${projectId}`);
   const infoRef = getProjectInfoRef(projectId);
@@ -814,7 +814,7 @@ function updateDatalistWithOptions(allProjectNames, projectDataListElement) {
 async function populateProjectDataList(projectDataListElement) {
   // console.log("[populateProjectDataList] Populating project data list...");
   const CACHE_KEY = 'projectDataListCache';
-  const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes cache
+  const CACHE_EXPIRY = 30 * 1000; // 5 minutes cache -> 30秒に短縮
 
   try {
     const cachedData = localStorage.getItem(CACHE_KEY);
@@ -857,6 +857,11 @@ async function populateProjectDataList(projectDataListElement) {
   }
 }
 
+// 新規追加時のキャッシュクリア関数を追加
+function clearProjectListCache() {
+  localStorage.removeItem('projectDataListCache');
+  console.log("[clearProjectListCache] Project list cache cleared.");
+}
 
 // ======================================================================
 // 10. Data Manipulation - Counters & Number Generation
@@ -879,7 +884,7 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
       } else {
           console.warn("[getNextDeteriorationNumber] Transaction failed. Reading directly.");
           const fallbackSnapshot = await counterRef.once('value');
-          nextNumber = (fallbackSnapshot.val() || 0) + 1;
+          nextNumber = (fallbackSnapshot.val() || 0) + 1; 
       }
   } catch (error) {
       console.error("Error getting next deterioration number (transaction):", error);
@@ -983,7 +988,7 @@ async function handleDeteriorationSubmit(event, locationInput, deteriorationName
     ]);
 
     const deteriorationData = {
-      number: nextNumber,
+      number: nextNumber, 
       location: location,
       name: deteriorationName,
       photoNumber: newPhotoNumber, // Use auto-generated photo number
@@ -994,7 +999,7 @@ async function handleDeteriorationSubmit(event, locationInput, deteriorationName
     await deteriorationRef.push(deteriorationData);
 
     console.log("[handleDeteriorationSubmit] Submitted successfully.");
-    hidePredictions(locationPredictionsElement);
+    hidePredictions(locationPredictionsElement); 
     locationInput.value = '';
     deteriorationNameInput.value = '';
     // Photo number input is removed
@@ -1035,9 +1040,9 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
         getNextDeteriorationNumber(currentProjectId, currentBuildingId),
         getNextPhotoNumber(currentProjectId, currentBuildingId)
     ]);
-
+    
     const deteriorationData = {
-      number: nextNumber,
+      number: nextNumber, 
       location: location, // Use last added location
       name: deteriorationName, // Use last added name
       photoNumber: newPhotoNumber, // Use auto-generated photo number
@@ -1114,7 +1119,7 @@ function handleDeleteClick(projectId, buildingId, recordId, recordNumber) {
         // but the listener should handle the table re-render automatically.
         const nextIdDisplayElement = document.getElementById('nextIdDisplay');
         if (nextIdDisplayElement) {
-             updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
+        updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement);
         }
       })
       .catch(error => {
@@ -1228,10 +1233,10 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
         let formattedDate = '';
         if (deterioration.createdAt) {
             try {
-                const date = new Date(deterioration.createdAt);
+            const date = new Date(deterioration.createdAt);
                 if (!isNaN(date)) { // Check if date is valid
-                    const pad = (num) => num.toString().padStart(2, '0');
-                    formattedDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+            const pad = (num) => num.toString().padStart(2, '0');
+            formattedDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
                 } else {
                     formattedDate = 'Invalid Date';
                 }
@@ -1278,8 +1283,8 @@ function handleExportCsv(siteNameInput, buildingSelectElement) {
 
     // Cleanup
     setTimeout(() => { // Delay revokeObjectURL slightly
-        URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
         console.log("[handleExportCsv] CSV export initiated and cleanup done.");
     }, 100);
 
@@ -1430,7 +1435,7 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
   }
   const listenerKey = `${projectId}_${buildingId}`;
   // console.log(`[setupDeteriorationListener] Setting up listener for ${listenerKey}`);
-
+  
   // Ensure no duplicate listener
   if (deteriorationListeners[listenerKey]) {
     console.warn(`[setupDeteriorationListener] Detaching existing listener for ${listenerKey}`);
@@ -1463,7 +1468,7 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
         // ★ 修正: renderDeteriorationTable 呼び出し修正
         renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
         if (deteriorationTableBodyElement) {
-            deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化リストの表示中にエラーが発生しました。</td></tr>';
+        deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化リストの表示中にエラーが発生しました。</td></tr>';
         }
     }
   };
@@ -1496,7 +1501,7 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
       }
       if(nextIdDisplayElement) updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement); // Try to update ID display
       console.log(`--- fetchAndRenderDeteriorations END (Missing Args/Elements) ---`);
-      return;
+    return;
   }
 
   console.log(`[fetchAndRenderDeteriorations] Setting up listener and updating next ID for ${projectId}/${buildingId}`);
@@ -1517,8 +1522,8 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
       // ★ 修正: renderDeteriorationTable 呼び出し修正
       renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
       if (deteriorationTableBodyElement) {
-          deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化情報の準備中にエラーが発生しました。</td></tr>';
-      }
+      deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化情報の準備中にエラーが発生しました。</td></tr>';
+  }
   }
   console.log(`--- fetchAndRenderDeteriorations END for ${projectId}/${buildingId} ---`);
 }
@@ -1687,22 +1692,31 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
   console.log(`[handleAddProjectAndBuilding] Project ID: ${projectId}`);
 
   // Disable button during operation?
-  const addButton = document.getElementById('addBuildingBtn'); // Assuming this is the trigger button
+  const addButton = document.getElementById('addBuildingBtn');
   if (addButton) addButton.disabled = true;
 
   try {
     // 1. Ensure project exists (or create/update it)
     const projectInfoCreatedOrUpdated = await ensureProjectExists(projectId, siteName, projectDataListElement);
 
-    // 2. Save/Update the selected buildings
+    // 2. キャッシュをクリアしてデータリストを強制的に更新
+    if (projectInfoCreatedOrUpdated) { // プロジェクト情報が新規作成または更新された場合のみキャッシュクリア
+        clearProjectListCache();
+        console.log("[handleAddProjectAndBuilding] Project info updated. Refreshing datalist.");
+        const updatedProjectNames = await populateProjectDataList(projectDataListElement);
+        updateDatalistWithOptions(updatedProjectNames, projectDataListElement);
+    }
+
+    // 3. Save/Update the selected buildings
     const wasAnyBuildingAddedOrUpdated = await saveBuildingsToFirebase(projectId, buildingsToAdd);
 
     console.log(`[handleAddProjectAndBuilding] Project changes: ${projectInfoCreatedOrUpdated}, Building changes: ${wasAnyBuildingAddedOrUpdated}`);
 
-    // 3. Update UI - Selector, Active Names, Table
+    // 4. Update UI - Selector, Active Names, Table
     currentProjectId = projectId; // Update global state
     localStorage.setItem('lastProjectId', currentProjectId);
     activeProjectNameSpanElement.textContent = siteName; // Update display
+    addProjectToRecentList(siteName); // 最近使用したリストに追加
 
     // Update the building selector and load data for the last checked/relevant building
     await updateBuildingSelectorForProject(
@@ -1719,26 +1733,25 @@ async function handleAddProjectAndBuilding(siteNameInput, buildingCheckboxContai
         lastCheckedBuildingId // Pass the ID of the last checked building to select it
     );
 
-    // 4. Reset checkboxes (optional, keep them checked?)
-    // buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:not(:disabled)').forEach(checkbox => checkbox.checked = false);
-    // // Re-check defaults maybe?
-    // const defaultSiteCheckbox = document.getElementById('addBuilding-site');
-    // const defaultACheckbox = document.getElementById('addBuilding-A');
-    // if(defaultSiteCheckbox) defaultSiteCheckbox.checked = true;
-    // if(defaultACheckbox) defaultACheckbox.checked = true;
+    // 5. Reset checkboxes (optional, keep them checked? Adjust based on desired UX)
+    // Consider UX: Maybe keep them checked if user might add more buildings for the same project?
+    // Or clear non-defaults:
+    // buildingCheckboxContainer.querySelectorAll('input[name="buildingToAdd"]:not(:disabled):not(#addBuilding-site):not(#addBuilding-A)')
+    //   .forEach(checkbox => checkbox.checked = false);
 
-    // 5. Switch to detail tab
+    // 6. Switch to detail tab
     switchTab('detail', infoTabBtn, detailTabBtn, infoTab, detailTab);
 
-    console.log("--- Add/Update Project & Buildings End (Success) ---");
+    // 7. Alert user (optional, depends on UX)
+    // alert(`${siteName} の情報と建物を追加/更新しました。`);
 
   } catch (error) {
-    console.error("[handleAddProjectAndBuilding] <<<< FUNCTION ERROR >>>> :", error);
-    alert(`処理中にエラーが発生しました: ${error.message}`);
-    console.log("--- Add/Update Project & Buildings End (Error) ---");
+    console.error("[handleAddProjectAndBuilding] Error:", error);
+    alert("現場情報の追加/更新中にエラーが発生しました。");
   } finally {
       // Re-enable button
       if (addButton) addButton.disabled = false;
+      console.log("--- Add/Update Project & Buildings End ---");
   }
 }
 
