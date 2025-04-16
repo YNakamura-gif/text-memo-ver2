@@ -230,114 +230,122 @@ async function loadPredictionData() {
 // 6. Prediction Logic Functions
 // ======================================================================
 function generateLocationPredictions(inputText) {
-  // console.log(`[generateLocationPredictions] Input: \"${inputText}\"`);
-  const inputTextTrimmed = inputText.trim();
-  if (!inputTextTrimmed) return [];
+    // console.log(`[generateLocationPredictions] Input: \"${inputText}\"`);
+    const inputTextTrimmed = inputText.trim();
+    if (!inputTextTrimmed) return [];
 
-  const inputTextHankaku = zenkakuToHankaku(inputTextTrimmed);
-  // console.log(`[generateLocationPredictions] Input after Hankaku: \"${inputTextHankaku}\"`);
+    const inputTextHankaku = zenkakuToHankaku(inputTextTrimmed);
+    // console.log(`[generateLocationPredictions] Input after Hankaku: \"${inputTextHankaku}\"`);
 
-  let floorSearchTerm = null;
-  let roomSearchTermRaw = inputTextHankaku;
-  let roomSearchTermHiragana = '';
+    let floorSearchTerm = null;
+    let roomSearchTermRaw = inputTextHankaku;
+    let roomSearchTermHiragana = '';
 
-  // Try to extract floor prefix (e.g., 1, B1, PH, 1F, RF)
-  const floorMatch = roomSearchTermRaw.match(/^([a-zA-Z0-9]{1,3}[fF]?)(.*)$/);
+    // シンプルな階数プレフィックス抽出 (例: 数字 or 英字1-3文字 + F/f(任意))
+    const floorMatch = roomSearchTermRaw.match(/^([a-zA-Z0-9]{1,3}[fF]?)(.*)$/);
 
-  if (floorMatch && floorMatch[1]) {
-      // Check if the second part exists and is not empty
-      if (floorMatch[2] && floorMatch[2].trim() !== '') {
-          floorSearchTerm = floorMatch[1].toLowerCase();
-          roomSearchTermRaw = floorMatch[2].trim(); // Use the rest as room search term
-          // console.log(`[generateLocationPredictions] Floor detected: '${floorSearchTerm}', Room term: '${roomSearchTermRaw}'`);
-      } else {
-          // Only floor part was entered
-          floorSearchTerm = floorMatch[1].toLowerCase();
-          roomSearchTermRaw = ''; // No room term
-          // console.log(`[generateLocationPredictions] Only floor detected: '${floorSearchTerm}'`);
-      }
-  } else {
-      // No distinct floor prefix found, treat whole input as room search term
-      // console.log("[generateLocationPredictions] No floor prefix detected.");
-  }
-
-
-  roomSearchTermHiragana = katakanaToHiragana(roomSearchTermRaw.toLowerCase());
-
-  if (!floorSearchTerm && !roomSearchTermHiragana) {
-    // console.log("[generateLocationPredictions] No valid search term after processing.");
-    return [];
-  }
-
-  let matchingFloors = new Set();
-  let matchingRooms = new Set();
-
-  locationPredictions.forEach(item => {
-    const itemFloorLower = item.floor?.toLowerCase() || '';
-    const itemValueLower = item.value?.toLowerCase() || '';
-    const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
-
-    let floorMatch = !floorSearchTerm; // If no floor term, matches all
-    if (floorSearchTerm && itemFloorLower.startsWith(floorSearchTerm)) {
-        floorMatch = true;
+    if (floorMatch && floorMatch[1]) {
+        // 抽出したプレフィックスを階数検索タームとする
+        floorSearchTerm = floorMatch[1].toLowerCase();
+        // 残りを部屋名検索タームとする（先頭のスペースは除去）
+        roomSearchTermRaw = floorMatch[2] ? floorMatch[2].trim() : '';
+        // console.log(`[generateLocationPredictions] Floor detected: '${floorSearchTerm}', Room term: '${roomSearchTermRaw}'`);
+    } else {
+        // 階数プレフィックスが見つからなければ、入力全体を部屋名検索タームとする
+        roomSearchTermRaw = inputTextHankaku;
+        // console.log(`[generateLocationPredictions] No floor prefix detected, treating as room term: '${roomSearchTermRaw}'`);
     }
 
-    let roomMatch = !roomSearchTermHiragana; // If no room term, matches all
-    if (roomSearchTermHiragana) {
-        if (itemValueLower.includes(roomSearchTermRaw.toLowerCase()) || itemReadingHiragana.includes(roomSearchTermHiragana)) {
-           roomMatch = true;
+    roomSearchTermHiragana = katakanaToHiragana(roomSearchTermRaw.toLowerCase());
+
+    // 検索タームがなければ空配列を返す
+    if (!floorSearchTerm && !roomSearchTermHiragana) {
+      // console.log("[generateLocationPredictions] No valid search term after processing.");
+      return [];
+    }
+
+    let candidateFloors = new Set();
+    let candidateRooms = new Set();
+    let directMatches = new Set(); // 入力に完全一致する可能性のある候補
+
+    locationPredictions.forEach(item => {
+        const itemFloor = item.floor || '';
+        const itemFloorLower = itemFloor.toLowerCase();
+        const itemValue = item.value || ''; // 部屋名
+        const itemValueLower = itemValue.toLowerCase();
+        const itemReadingHiragana = katakanaToHiragana(item.reading?.toLowerCase() || '');
+        const combinedLocation = `${itemFloor} ${itemValue}`.trim(); // 組み合わせた文字列
+
+        // --- 候補の収集 ---
+        // 1. 階数検索タームがある場合、前方一致する階数を候補に追加
+        if (floorSearchTerm && itemFloorLower.startsWith(floorSearchTerm)) {
+            candidateFloors.add(itemFloor);
         }
+
+        // 2. 部屋名検索タームがある場合、名称または読みが前方一致する部屋名を候補に追加
+        if (roomSearchTermHiragana && (itemValueLower.startsWith(roomSearchTermRaw.toLowerCase()) || itemReadingHiragana.startsWith(roomSearchTermHiragana))) {
+             candidateRooms.add(itemValue);
+        }
+
+        // 3. 入力文字列が、CSV内の「階数 部屋名」の組み合わせに前方一致するかチェック
+        if (combinedLocation.toLowerCase().startsWith(inputTextHankaku.toLowerCase())) {
+             directMatches.add(combinedLocation);
+        }
+        // 4. 入力文字列が、CSV内の部屋名のみに前方一致するかチェック (階数がないデータ用)
+        else if (!itemFloor && itemValueLower.startsWith(inputTextHankaku.toLowerCase())) {
+             directMatches.add(itemValue);
+        }
+
+    });
+
+    let finalPredictions = new Set(directMatches); // まず直接一致したものを優先
+
+    // --- 組み合わせ生成 ---
+    const floorArray = Array.from(candidateFloors);
+    const roomArray = Array.from(candidateRooms);
+
+    // A. 階数と部屋名の両方が入力されている場合 -> 候補の組み合わせを追加
+    if (floorSearchTerm && roomSearchTermHiragana) {
+        floorArray.forEach(floor => {
+            roomArray.forEach(room => {
+                 // CSVデータ内で実際にその組み合わせが存在するか確認してから追加（より精度を上げる場合）
+                 const exists = locationPredictions.some(p => p.floor === floor && p.value === room);
+                 if (exists) {
+                     finalPredictions.add(`${floor} ${room}`);
+                 }
+                 // または、単純に組み合わせる
+                 // finalPredictions.add(`${floor} ${room}`);
+            });
+        });
     }
-
-    if (floorMatch && roomMatch) {
-        if(item.floor) matchingFloors.add(item.floor);
-        if(item.value) matchingRooms.add(item.value);
+    // B. 階数のみ入力されている場合 -> 「階数」自体と「階数 + 候補部屋名」を追加
+    else if (floorSearchTerm) {
+        floorArray.forEach(floor => {
+             finalPredictions.add(floor); // 階数自体
+             // その階数に紐づく部屋名をCSVから取得して組み合わせる
+             locationPredictions.forEach(p => {
+                 if (p.floor === floor && p.value) {
+                      finalPredictions.add(`${floor} ${p.value}`);
+                 }
+             });
+        });
     }
-  });
-
-  // Convert sets to arrays
-  const floorArray = Array.from(matchingFloors);
-  const roomArray = Array.from(matchingRooms);
-
-  let combinations = new Set();
-
-  // Add floors themselves if only floor was searched
-  if (floorSearchTerm && !roomSearchTermHiragana) {
-    floorArray.forEach(floor => combinations.add(floor));
-  }
-
-  // Add rooms themselves if only room was searched
-  if (!floorSearchTerm && roomSearchTermHiragana) {
-    roomArray.forEach(room => combinations.add(room));
-  }
-
-  // Add floor + room combinations
-  floorArray.forEach(floor => {
-      roomArray.forEach(room => {
-          // Only combine if it makes sense based on search
-          if (floorSearchTerm && roomSearchTermHiragana) { // Both searched
-              combinations.add(`${floor} ${room}`);
-          } else if (floorSearchTerm && !roomSearchTermHiragana) { // Only floor searched
-               // Combine floor with potentially relevant rooms found based on floor prefix
-               const floorPrefixLower = floor.toLowerCase();
-               locationPredictions.forEach(item => {
-                   if (item.floor?.toLowerCase() === floorPrefixLower && item.value){
-                       combinations.add(`${floor} ${item.value}`);
-                   }
-               });
-          } else if (!floorSearchTerm && roomSearchTermHiragana) { // Only room searched
-               // Combine room with potentially relevant floors found based on room name
-              locationPredictions.forEach(item => {
-                  if (item.value === room && item.floor){
-                      combinations.add(`${item.floor} ${room}`);
+    // C. 部屋名のみ入力されている場合 -> 「部屋名」自体と「候補階数 + 部屋名」を追加
+    else if (roomSearchTermHiragana) {
+         roomArray.forEach(room => {
+             finalPredictions.add(room); // 部屋名自体
+             // その部屋名に紐づく階数をCSVから取得して組み合わせる
+             locationPredictions.forEach(p => {
+                  if (p.value === room && p.floor) {
+                      finalPredictions.add(`${p.floor} ${room}`);
                   }
-              });
-          }
-      });
-  });
+             });
+         });
+    }
 
-  // console.log(`[generateLocationPredictions] Generated ${combinations.size} unique combinations.`);
-  return Array.from(combinations).slice(0, 10);
+    // console.log(`[generateLocationPredictions] Generated ${finalPredictions.size} unique predictions.`);
+    // 制限して返す
+    return Array.from(finalPredictions).slice(0, 10);
 }
 
 
@@ -597,7 +605,7 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
 // 8. Data Loading - Building List & Deteriorations
 // ======================================================================
 // ★ 修正: 引数から editPhotoNumberInput を削除
-async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, /* ★削除 */ buildingIdToSelect = null) {
+async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */, buildingIdToSelect = null) {
   if (!buildingSelectElement || !activeBuildingNameSpanElement || !nextIdDisplayElement || !deteriorationTableBodyElement || !editModalElement || !editIdDisplay || !editLocationInput || !editDeteriorationNameInput) {
     console.error("[updateBuildingSelectorForProject] Missing one or more required UI elements.");
     return;
