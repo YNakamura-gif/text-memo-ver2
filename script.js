@@ -308,13 +308,11 @@ function generateLocationPredictions(inputText) {
     if (floorSearchTerm && roomSearchTermHiragana) {
         floorArray.forEach(floor => {
             roomArray.forEach(room => {
-                 // CSVデータ内で実際にその組み合わせが存在するか確認してから追加（より精度を上げる場合）
-                 const exists = locationPredictions.some(p => p.floor === floor && p.value === room);
-                 if (exists) {
-                     finalPredictions.add(`${floor} ${room}`);
-                 }
-                 // または、単純に組み合わせる
-                 // finalPredictions.add(`${floor} ${room}`);
+                 // ★ 修正: exists チェックを削除し、単純に組み合わせる
+                 // const exists = locationPredictions.some(p => p.floor === floor && p.value === room);
+                 // if (exists) {
+                 finalPredictions.add(`${floor} ${room}`);
+                 // }
             });
         });
     }
