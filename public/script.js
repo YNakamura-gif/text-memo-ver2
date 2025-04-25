@@ -2,14 +2,14 @@
 // 1. Firebase Configuration & Initialization
 // ======================================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDVfcDRu0-91-gWmum-OS-iQMk34PAYq70",
-  authDomain: "text-memo-ver2.firebaseapp.com",
-  databaseURL: "https://text-memo-ver2-default-rtdb.firebaseio.com",
-  projectId: "text-memo-ver2",
-  storageBucket: "text-memo-ver2.firebasestorage.app",
-  messagingSenderId: "1067081483347",
-  appId: "1:1067081483347:web:28a99f942c412c1261b2a6",
-  measurementId: "G-P976HM70JN"
+  apiKey: "AIzaSyAds-ShFEaFnBEfdgiHkDeasZxxnh4Q494",
+  authDomain: "text-memo-2-danchi.firebaseapp.com",
+  databaseURL: "https://text-memo-2-danchi-default-rtdb.firebaseio.com",
+  projectId: "text-memo-2-danchi",
+  storageBucket: "text-memo-2-danchi.firebasestorage.app",
+  messagingSenderId: "328916274808",
+  appId: "1:328916274808:web:de285bf63472e64705278d",
+  measurementId: "G-CSZDCFT8P6"
 };
 
 firebase.initializeApp(firebaseConfig);
