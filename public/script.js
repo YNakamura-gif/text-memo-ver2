@@ -1282,7 +1282,13 @@ function setupSelectionListeners(siteNameInput, projectDataListElement, building
           await updateAndDisplayDataList(); // Refresh datalist with recent item first
 
           // ★ 修正: updateBuildingSelectorForProject 呼び出し修正
-          await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+          await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+          // 詳細タブに切り替え
+          const infoTabBtnElem = document.getElementById('infoTabBtn');
+          const detailTabBtnElem = document.getElementById('detailTabBtn');
+          const infoTabElem = document.getElementById('infoTab');
+          const detailTabElem = document.getElementById('detailTab');
+          switchTab('detailTab', infoTabBtnElem, detailTabBtnElem, infoTabElem, detailTabElem);
         } else {
           console.log(`[Site Name Change] Project "${selectedSiteName}" not found or name mismatch. Resetting.`);
           currentProjectId = null;
@@ -1838,6 +1844,21 @@ async function initializeApp() {
           updateDatalistWithOptions(names, projectDataListElement);
         }
         currentProjectId = projectId;
+        // 選択を詳細タブに反映
+        activeProjectNameSpanElement.textContent = name;
+        await updateBuildingSelectorForProject(
+          projectId,
+          buildingSelectElement,
+          activeBuildingNameSpanElement,
+          nextIdDisplayElement,
+          deteriorationTableBodyElement,
+          editModalElement,
+          editIdDisplay,
+          editLocationInput,
+          editDeteriorationNameInput
+        );
+        // 詳細タブに切り替え
+        switchTab('detailTab', infoTabBtn, detailTabBtn, infoTab, detailTab);
         addProjectToRecentList(name);
         alert('建物名を登録しました');
       } catch (error) {
