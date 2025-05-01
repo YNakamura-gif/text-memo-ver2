@@ -626,7 +626,7 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
 // 8. Data Loading - Building List & Deteriorations
 // ======================================================================
 // ★ 修正: 引数から editPhotoNumberInput を削除
-async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, buildingIdToSelect = null) {
+async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */, buildingIdToSelect = null) {
   // プロジェクト選択時に分類カテゴリを表示する
   if (!projectId) {
     buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
@@ -1758,6 +1758,7 @@ async function initializeApp() {
   // DOM Element Retrieval
   const siteNameInput = document.getElementById('siteName');
   const projectDataListElement = document.getElementById('projectDataList');
+  const registerProjectBtn = document.getElementById('registerProjectBtn');
   const infoTabBtn = document.getElementById('infoTabBtn');
   const detailTabBtn = document.getElementById('detailTabBtn');
   const infoTab = document.getElementById('infoTab');
@@ -1819,6 +1820,32 @@ async function initializeApp() {
   switchTab('infoTab', infoTabBtn, detailTabBtn, infoTab, detailTab);
   updateCameraLink();
   console.log("Application initialized.");
+
+  // 登録ボタンイベント設定
+  if (registerProjectBtn) {
+    registerProjectBtn.addEventListener('click', async () => {
+      const name = siteNameInput.value.trim();
+      if (!name) {
+        showError('建物名を入力してください');
+        return;
+      }
+      const projectId = generateProjectId(name);
+      try {
+        const createdOrUpdated = await ensureProjectExists(projectId, name, projectDataListElement);
+        if (createdOrUpdated) {
+          clearProjectListCache();
+          const names = await populateProjectDataList(projectDataListElement);
+          updateDatalistWithOptions(names, projectDataListElement);
+        }
+        currentProjectId = projectId;
+        addProjectToRecentList(name);
+        alert('建物名を登録しました');
+      } catch (error) {
+        console.error('登録中にエラーが発生しました:', error);
+        showError('建物名の登録に失敗しました');
+      }
+    });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initializeApp);
