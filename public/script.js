@@ -30,6 +30,7 @@ let deteriorationListeners = {};
 let currentEditRecordId = null;
 let lastAddedLocation = '';
 let lastAddedName = '';
+let lastAddedCategory = '';
 // let lastAddedPhotoNumber = ''; // ★ 削除: 写真番号は自動採番のため不要
 let buildingsListener = null; // Firebase listener for buildings
 
@@ -52,8 +53,8 @@ function getDeteriorationCounterRef(projectId, buildingId) {
   return database.ref(`projects/${projectId}/counters/${buildingId}`);
 }
 // ★ 修正: 写真番号カウンター用の参照 (変更なし、カウンター自体は利用する)
-function getPhotoCounterRef(projectId, buildingId) {
-    return database.ref(`projects/${projectId}/photoCounters/${buildingId}`);
+function getPhotoCounterRef(projectId, category) {
+    return database.ref(`projects/${projectId}/photoCounters/${category}`);
 }
 
 // ======================================================================
@@ -105,26 +106,17 @@ function zenkakuToHankaku(str) {
 // ======================================================================
 // ★ NEW: Building ID to Photo Number Offset Mapping
 // ======================================================================
-const BUILDING_PHOTO_OFFSETS = {
-  "site": 0, // 敷地
-  "buildingA": 1000, // A棟
-  "buildingB": 2000, // B棟
-  "buildingC": 3000, // C棟
-  "buildingD": 4000, // D棟
-  "buildingE": 5000, // E棟
-  "buildingF": 6000, // F棟
-  "buildingG": 7000, // G棟
-  "buildingH": 8000, // H棟
-  "buildingI": 9000, // I棟
-  // 必要に応じて他の建物のマッピングを追加 (IDは generateBuildingId で生成されるもの、または固定値)
+// ★ 写真番号カテゴリ別オフセット設定 (A～その他)
+const CATEGORY_PHOTO_OFFSETS = {
+  "A(敷地)": 0,
+  "B(外壁)": 1000,
+  "C(屋上)": 2000,
+  "E(避難経路)": 3000,
+  "その他": 4000
 };
-
-// Helper function to get the offset for a building ID
-function getBuildingPhotoOffset(buildingId) {
-    // 未定義の buildingId の場合はデフォルトで 0 (敷地と同じ) を返すか、エラーを出すか検討
-    // ここでは 0 を返す (存在しない建物IDが来た場合)
-    // buildingId が null や undefined の場合も 0 を返す
-    return BUILDING_PHOTO_OFFSETS[buildingId] ?? 0;
+// カテゴリからオフセットを取得
+function getCategoryPhotoOffset(category) {
+  return CATEGORY_PHOTO_OFFSETS[category] ?? 0;
 }
 
 // ★ NEW: Update Camera Link URL based on selected building
@@ -828,13 +820,13 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
 }
 
 // ★ 修正: getNextPhotoNumber 関数 (新しいロジック)
-async function getNextPhotoNumber(projectId, buildingId) {
-    if (!projectId || !buildingId) {
-        console.warn("[getNextPhotoNumber] Missing projectId or buildingId.");
+async function getNextPhotoNumber(projectId, category) {
+    if (!projectId || !category) {
+        console.warn("[getNextPhotoNumber] Missing projectId or category.");
         return '0000'; // Default or error value
     }
-    const counterRef = getPhotoCounterRef(projectId, buildingId);
-    const offset = getBuildingPhotoOffset(buildingId); // Get building-specific offset
+    const counterRef = getPhotoCounterRef(projectId, category);
+    const offset = getCategoryPhotoOffset(category); // Get category-specific offset
     let nextLocalCounter = 1; // Counter within the building (starts from 1)
 
     try {
@@ -868,7 +860,7 @@ async function getNextPhotoNumber(projectId, buildingId) {
     const finalPhotoNumber = offset + Math.min(nextLocalCounter, 999);
 
     if (nextLocalCounter > 999) {
-        console.warn(`[getNextPhotoNumber] Local counter ${nextLocalCounter} exceeded 999 for offset ${offset}. Capped at ${finalPhotoNumber}. Building: ${buildingId}`);
+        console.warn(`[getNextPhotoNumber] Local counter ${nextLocalCounter} exceeded 999 for offset ${offset}. Capped at ${finalPhotoNumber}. Building: ${category}`);
         // Consider logging this more permanently or alerting the user if necessary
     }
 
@@ -879,67 +871,74 @@ async function getNextPhotoNumber(projectId, buildingId) {
 // 11. Event Handlers - Deterioration Form
 // ======================================================================
 // ★ 修正: recordLastAddedData 関数 (写真番号を除去)
-function recordLastAddedData(location, name) {
+function recordLastAddedData(location, name, category) {
     lastAddedLocation = location;
     lastAddedName = name;
+    lastAddedCategory = category;
     // console.log(`[recordLastAddedData] Recorded last added: Location="${lastAddedLocation}", Name="${lastAddedName}"`);
 }
 
 // ★ 修正: handleDeteriorationSubmit 関数
 async function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, /* ★削除 */ nextIdDisplayElement, locationPredictionsElement) {
-  if (!locationInput || !deteriorationNameInput || !nextIdDisplayElement || !locationPredictionsElement) {
-      console.error("[handleDeteriorationSubmit] Missing required UI elements.");
-      alert("内部エラー: UI要素が見つかりません。");
-      return;
-  }
-  event.preventDefault();
-  const location = locationInput.value.trim();
-  const deteriorationName = deteriorationNameInput.value.trim();
+   if (!locationInput || !deteriorationNameInput || !nextIdDisplayElement || !locationPredictionsElement) {
+       console.error("[handleDeteriorationSubmit] Missing required UI elements.");
+       alert("内部エラー: UI要素が見つかりません。");
+       return;
+   }
+   event.preventDefault();
+   // カテゴリ選択取得と検証
+   const category = document.getElementById('locationCategorySelect').value;
+   if (!category) {
+     alert("場所カテゴリを選択してください。");
+     return;
+   }
+   const location = locationInput.value.trim();
+   const deteriorationName = deteriorationNameInput.value.trim();
 
-  if (!location || !deteriorationName) {
-    alert("場所と劣化名を入力してください。");
-    return;
-  }
+   if (!location || !deteriorationName) {
+     alert("場所と劣化名を入力してください。");
+     return;
+   }
 
-  if (!currentProjectId || !currentBuildingId) {
-    alert("現場名または建物名が選択されていません。");
-    return;
-  }
+   if (!currentProjectId || !currentBuildingId) {
+     alert("現場名または建物名が選択されていません。");
+     return;
+   }
 
-  console.log(`[handleDeteriorationSubmit] Submitting for ${currentProjectId}/${currentBuildingId}`);
+   console.log(`[handleDeteriorationSubmit] Submitting for ${currentProjectId}/${currentBuildingId}`);
 
-  try {
-    // Get next deterioration number and photo number in parallel
-    const [nextNumber, newPhotoNumber] = await Promise.all([
-        getNextDeteriorationNumber(currentProjectId, currentBuildingId),
-        getNextPhotoNumber(currentProjectId, currentBuildingId)
-    ]);
+   try {
+     // Get next deterioration number and photo number in parallel
+     const [nextNumber, newPhotoNumber] = await Promise.all([
+         getNextDeteriorationNumber(currentProjectId, currentBuildingId),
+         getNextPhotoNumber(currentProjectId, category)
+     ]);
 
-    const deteriorationData = {
-      number: nextNumber, 
-      location: location,
-      name: deteriorationName,
-      photoNumber: newPhotoNumber, // Use auto-generated photo number
-      createdAt: firebase.database.ServerValue.TIMESTAMP
-    };
+     const deteriorationData = {
+       number: nextNumber, 
+       location: location,
+       name: deteriorationName,
+       photoNumber: newPhotoNumber, // Use auto-generated photo number
+       createdAt: firebase.database.ServerValue.TIMESTAMP
+     };
 
-    const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
-    await deteriorationRef.push(deteriorationData);
+     const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+     await deteriorationRef.push(deteriorationData);
 
-    console.log("[handleDeteriorationSubmit] Submitted successfully.");
-    hidePredictions(locationPredictionsElement); 
-    locationInput.value = '';
-    deteriorationNameInput.value = '';
-    // Photo number input is removed
-    updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-    recordLastAddedData(location, deteriorationName); // Record data for continuous add
-    locationInput.focus(); // Focus back on location input
+     console.log("[handleDeteriorationSubmit] Submitted successfully.");
+     hidePredictions(locationPredictionsElement); 
+     locationInput.value = '';
+     deteriorationNameInput.value = '';
+     // Photo number input is removed
+     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
+     recordLastAddedData(location, deteriorationName, category); // Record data for continuous add
+     locationInput.focus(); // Focus back on location input
 
-  } catch (error) {
-      console.error("[handleDeteriorationSubmit] Error:", error);
-      alert("情報の保存中にエラーが発生しました: " + error.message);
-  }
-}
+   } catch (error) {
+     console.error("[handleDeteriorationSubmit] Error:", error);
+     alert("情報の保存中にエラーが発生しました: " + error.message);
+   }
+ }
 
 // ★ 修正: handleContinuousAdd 関数
 async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
@@ -966,7 +965,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
     // Get next deterioration number and photo number in parallel
     const [nextNumber, newPhotoNumber] = await Promise.all([
         getNextDeteriorationNumber(currentProjectId, currentBuildingId),
-        getNextPhotoNumber(currentProjectId, currentBuildingId)
+        getNextPhotoNumber(currentProjectId, lastAddedCategory)
     ]);
     
     const deteriorationData = {
@@ -983,7 +982,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
     console.log("[handleContinuousAdd] Submitted successfully.");
     // Don't clear inputs here, keep them for reference if needed
     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-    recordLastAddedData(location, deteriorationName); // Re-record in case needed again
+    recordLastAddedData(location, deteriorationName, lastAddedCategory); // Re-record in case needed again
     locationInput.focus(); // Focus back on location input
 
   } catch (error) {
@@ -1345,7 +1344,7 @@ async function handleBuildingSelectChange(buildingSelectElement, activeBuildingN
     updateCameraLink(); // ★ ADD: Update camera link after selection change
 
     // Clear last added data when building changes
-    recordLastAddedData('', '');
+    recordLastAddedData('', '', '');
 }
 
 
