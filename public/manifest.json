@@ -1,6 +1,6 @@
 {
-  "name": "12条点検 テキスト記録アプリ v2",
-  "short_name": "12条点検",
+  "name": "団地用Text Memo",
+  "short_name": "団地用Text Memo",
   "description": "12条点検の劣化調査を効率的に記録するアプリ",
   "start_url": "/",
   "display": "standalone",
