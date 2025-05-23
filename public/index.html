@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>団地用Text Memo</title>
+  <title>12条点検 テキスト記録アプリ v2 (自動採番)</title>
   
   <!-- PWA設定 -->
   <link rel="manifest" href="/manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="団地用Text Memo">
+  <meta name="apple-mobile-web-app-title" content="12条点検">
   <meta name="theme-color" content="#2563eb">
 
   <!-- アイコン設定 -->
@@ -22,7 +22,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
   <header class="bg-green-600 text-white p-4 shadow-md">
-    <h1 class="text-lg font-bold text-center">団地用Text Memo</h1>
+    <h1 class="text-lg font-bold text-center">12条点検 テキスト記録アプリ v2 (自動採番)</h1>
   </header>
 
   <main class="container mx-auto p-4 max-w-md">
@@ -43,14 +43,60 @@
       <div class="bg-white p-4 rounded-md shadow-sm">
         <h2 class="text-lg font-semibold mb-4">基本情報</h2>
         <div class="mb-4">
-          <label for="siteName" class="block text-sm font-medium text-gray-700 mb-1">建物名</label>
+          <label for="siteName" class="block text-sm font-medium text-gray-700 mb-1">現場名</label>
           <div class="relative">
-            <input id="siteName" type="text" list="projectDataList" placeholder="建物名を入力または選択" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
+            <input id="siteName" type="text" list="projectDataList" placeholder="現場名を入力または選択" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
             <datalist id="projectDataList"></datalist>
           </div>
         </div>
-        <div class="d-grid mb-4">
-          <button id="registerProjectBtn" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4 hover:bg-blue-700">登録</button>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">建物を追加</label>
+          <div id="buildingCheckboxContainer" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-4 gap-y-2 mb-3 p-3 border border-gray-200 rounded-md">
+            <div>
+              <input type="checkbox" id="addBuilding-site" name="buildingToAdd" value="site" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded" checked disabled>
+              <label for="addBuilding-site" class="text-sm text-gray-500">敷地</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-A" name="buildingToAdd" value="buildingA" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded" checked disabled>
+              <label for="addBuilding-A" class="text-sm text-gray-500">A棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-B" name="buildingToAdd" value="buildingB" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-B" class="text-sm">B棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-C" name="buildingToAdd" value="buildingC" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-C" class="text-sm">C棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-D" name="buildingToAdd" value="buildingD" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-D" class="text-sm">D棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-E" name="buildingToAdd" value="buildingE" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-E" class="text-sm">E棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-F" name="buildingToAdd" value="buildingF" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-F" class="text-sm">F棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-G" name="buildingToAdd" value="buildingG" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-G" class="text-sm">G棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-H" name="buildingToAdd" value="buildingH" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-H" class="text-sm">H棟</label>
+            </div>
+            <div>
+              <input type="checkbox" id="addBuilding-I" name="buildingToAdd" value="buildingI" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+              <label for="addBuilding-I" class="text-sm">I棟</label>
+            </div>
+          </div>
+          <button id="addBuildingBtn" type="button" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4 w-full sm:w-auto">
+            選択した建物を追加
+          </button>
         </div>
       </div>
     </div>
@@ -76,61 +122,60 @@
       <h2 class="text-lg font-semibold mb-4">劣化情報入力</h2>
       
       <form id="deteriorationForm" class="bg-white p-4 rounded-md shadow-sm mb-4 relative">
-        <!-- カメラアプリ用リンク要素を追加 -->
-        <a id="cameraLink" href="#" target="_blank" title="カメラアプリを開く (新しいタブ)"
-           class="hidden absolute top-4 right-4 p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
-          📷
+        <a id="cameraLink" href="#" target="_blank" title="カメラアプリを開く (新しいタブ)" 
+           class="absolute top-4 right-4 p-2 bg-blue-50 text-blue-600 rounded-lg shadow-sm hover:bg-blue-100 transition-colors">
+          <span class="text-2xl">📷</span>
         </a>
-        <!-- 場所カテゴリ選択 -->
-        <div class="col-span-6">
-          <label for="locationCategorySelect" class="block text-sm font-medium text-gray-700 mb-1">場所カテゴリ</label>
-          <select id="locationCategorySelect" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10 mb-2">
-            <option value="">--選択してください--</option>
-            <option value="A(敷地)">A(敷地)</option>
-            <option value="B(外壁)">B(外壁)</option>
-            <option value="C(屋上)">C(屋上)</option>
-            <option value="E(避難経路)">E(避難経路)</option>
-            <option value="その他">その他</option>
-          </select>
-          <label for="locationInput" class="block text-sm font-medium text-gray-700 mb-1">場所</label>
-          <div class="relative overflow-visible">
-            <input
-              id="locationInput"
-              type="text"
-              placeholder="場所を入力"
-              class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
-            >
-            <ul id="locationPredictions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
-            </ul>
-          </div>
-        </div>
-        
-        <div class="col-span-6">
-          <label for="deteriorationNameInput" class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
-          <div class="relative overflow-visible">
-            <input
-              id="deteriorationNameInput"
-              type="text"
-              placeholder="劣化名を入力"
-              class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
-            >
-            <div id="suggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
+
+        <div class="grid grid-cols-12 gap-x-2 gap-y-1 items-end">
+          
+          <div class="col-span-6">
+            <div class="flex items-center mb-1">
+              <div class="mr-2">
+                <span class="text-sm font-medium text-gray-500 mr-1">番号:</span>
+                <span id="nextIdDisplay" class="inline-block px-2 py-0.5 bg-gray-100 border border-gray-300 rounded-md text-sm">1</span>
+              </div>
+            </div>
+            <label for="locationInput" class="block text-sm font-medium text-gray-700 mb-1">場所</label>
+            <div class="relative overflow-visible">
+              <input
+                id="locationInput"
+                type="text"
+                placeholder="場所を入力"
+                class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
+              >
+              <ul id="locationPredictions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
+              </ul>
             </div>
           </div>
+          
+          <div class="col-span-6">
+            <label for="deteriorationNameInput" class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
+            <div class="relative overflow-visible">
+              <input
+                id="deteriorationNameInput"
+                type="text"
+                placeholder="劣化名を入力"
+                class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
+              >
+              <div id="suggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
+              </div>
+            </div>
+          </div>
+          
+          <!-- ★ コメントアウト: 写真番号入力欄 -->
+          <!--
+          <div class="col-span-2">
+            <label for="photoNumberInput" class="block text-sm font-medium text-gray-700 mb-1">写真</label>
+            <input
+              id="photoNumberInput"
+              type="text"
+              placeholder="番号"
+              class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
+            >
+          </div>
+          -->
         </div>
-        
-        <!-- ★ コメントアウト: 写真番号入力欄 -->
-        <!--
-        <div class="col-span-2">
-          <label for="photoNumberInput" class="block text-sm font-medium text-gray-700 mb-1">写真</label>
-          <input
-            id="photoNumberInput"
-            type="text"
-            placeholder="番号"
-            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
-          >
-        </div>
-        -->
         <div class="mt-3 flex justify-end space-x-2">
           <button
             type="submit"

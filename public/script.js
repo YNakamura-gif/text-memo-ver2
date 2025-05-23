@@ -30,7 +30,6 @@ let deteriorationListeners = {};
 let currentEditRecordId = null;
 let lastAddedLocation = '';
 let lastAddedName = '';
-let lastAddedCategory = '';
 // let lastAddedPhotoNumber = ''; // ★ 削除: 写真番号は自動採番のため不要
 let buildingsListener = null; // Firebase listener for buildings
 
@@ -53,8 +52,8 @@ function getDeteriorationCounterRef(projectId, buildingId) {
   return database.ref(`projects/${projectId}/counters/${buildingId}`);
 }
 // ★ 修正: 写真番号カウンター用の参照 (変更なし、カウンター自体は利用する)
-function getPhotoCounterRef(projectId, category) {
-    return database.ref(`projects/${projectId}/photoCounters/${category}`);
+function getPhotoCounterRef(projectId, buildingId) {
+    return database.ref(`projects/${projectId}/photoCounters/${buildingId}`);
 }
 
 // ======================================================================
@@ -106,17 +105,26 @@ function zenkakuToHankaku(str) {
 // ======================================================================
 // ★ NEW: Building ID to Photo Number Offset Mapping
 // ======================================================================
-// ★ 写真番号カテゴリ別オフセット設定 (A～その他)
-const CATEGORY_PHOTO_OFFSETS = {
-  "A(敷地)": 0,
-  "B(外壁)": 1000,
-  "C(屋上)": 2000,
-  "E(避難経路)": 3000,
-  "その他": 4000
+const BUILDING_PHOTO_OFFSETS = {
+  "site": 0, // 敷地
+  "buildingA": 1000, // A棟
+  "buildingB": 2000, // B棟
+  "buildingC": 3000, // C棟
+  "buildingD": 4000, // D棟
+  "buildingE": 5000, // E棟
+  "buildingF": 6000, // F棟
+  "buildingG": 7000, // G棟
+  "buildingH": 8000, // H棟
+  "buildingI": 9000, // I棟
+  // 必要に応じて他の建物のマッピングを追加 (IDは generateBuildingId で生成されるもの、または固定値)
 };
-// カテゴリからオフセットを取得
-function getCategoryPhotoOffset(category) {
-  return CATEGORY_PHOTO_OFFSETS[category] ?? 0;
+
+// Helper function to get the offset for a building ID
+function getBuildingPhotoOffset(buildingId) {
+    // 未定義の buildingId の場合はデフォルトで 0 (敷地と同じ) を返すか、エラーを出すか検討
+    // ここでは 0 を返す (存在しない建物IDが来た場合)
+    // buildingId が null や undefined の場合も 0 を返す
+    return BUILDING_PHOTO_OFFSETS[buildingId] ?? 0;
 }
 
 // ★ NEW: Update Camera Link URL based on selected building
@@ -619,35 +627,130 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
 // ======================================================================
 // ★ 修正: 引数から editPhotoNumberInput を削除
 async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */, buildingIdToSelect = null) {
-  // プロジェクト選択時に分類カテゴリを表示する
+  if (!buildingSelectElement || !activeBuildingNameSpanElement || !nextIdDisplayElement || !deteriorationTableBodyElement || !editModalElement || !editIdDisplay || !editLocationInput || !editDeteriorationNameInput) {
+    console.error("[updateBuildingSelectorForProject] Missing one or more required UI elements.");
+    return;
+  }
+
   if (!projectId) {
+    console.warn("[updateBuildingSelectorForProject] No projectId provided.");
     buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
     buildingSelectElement.disabled = true;
     activeBuildingNameSpanElement.textContent = '未選択';
-    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+    // ★ 修正: renderDeteriorationTable 呼び出し修正
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
     updateNextIdDisplay(null, null, nextIdDisplayElement);
     currentBuildingId = null;
     return;
   }
-  // 点検箇所カテゴリの静的定義
-  const categories = [
-    {id: 'A', name: 'A(敷地)'},
-    {id: 'B', name: 'B(外壁)'},
-    {id: 'C', name: 'C(屋上)'},
-    {id: 'E', name: 'E(避難経路)'},
-    {id: 'others', name: 'その他'}
-  ];
-  buildingSelectElement.innerHTML = '<option value="">-- 点検箇所を選択 --</option>';
-  categories.forEach(cat => {
-    const option = document.createElement('option');
-    option.value = cat.id;
-    option.textContent = cat.name;
-    buildingSelectElement.appendChild(option);
-  });
-  buildingSelectElement.disabled = false;
-  activeBuildingNameSpanElement.textContent = '--';
-  currentBuildingId = null;
+  console.log(`[updateBuildingSelectorForProject] Updating buildings for project ${projectId}`);
+  const buildingsRef = getBuildingsRef(projectId);
+  buildingSelectElement.innerHTML = '<option value="">読み込み中...</option>';
+  buildingSelectElement.disabled = true;
+
+  try {
+    // console.log(`[updateBuildingSelectorForProject] Attempting to fetch buildings from Firebase for ${projectId}`);
+    const snapshot = await buildingsRef.once('value');
+    // console.log(`[updateBuildingSelectorForProject] Firebase snapshot received. Exists: ${snapshot.exists()}`);
+    const buildingsData = snapshot.val();
+    // console.log(`[updateBuildingSelectorForProject] Raw buildingsData:`, buildingsData);
+
+    const buildingEntries = buildingsData ? Object.entries(buildingsData) : [];
+    // console.log(`[updateBuildingSelectorForProject] Processed buildingEntries count: ${buildingEntries.length}`);
+
+    if (buildingEntries.length > 0) {
+      // console.log('[updateBuildingSelectorForProject] Building entries found. Populating selector...');
+      buildingSelectElement.innerHTML = '<option value="">-- 建物を選択 --</option>';
+      // Sort: site first, then by name
+      buildingEntries.sort(([idA, dataA], [idB, dataB]) => {
+          if (idA === 'site') return -1;
+          if (idB === 'site') return 1;
+          const nameA = dataA.name || '';
+          const nameB = dataB.name || '';
+          return nameA.localeCompare(nameB, 'ja');
+      });
+      // console.log('[updateBuildingSelectorForProject] Buildings sorted.');
+      
+      buildingEntries.forEach(([buildingId, buildingData]) => {
+        try {
+          const option = document.createElement('option');
+          option.value = buildingId;
+          option.textContent = buildingData?.name || `建物 (${buildingId})`; 
+          buildingSelectElement.appendChild(option);
+        } catch(loopError) {
+            console.error(`[updateBuildingSelectorForProject] Error adding option for building ID=${buildingId}:`, loopError);
+        }
+      });
+      buildingSelectElement.disabled = false;
+      // console.log('[updateBuildingSelectorForProject] Selector populated and enabled.');
+
+      let selectedBuildingId = null;
+      // console.log(`[updateBuildingSelectorForProject] Determining selection. Hint: ${buildingIdToSelect}, Current: ${currentBuildingId}, Last used: ${lastUsedBuilding}`);
+      if (buildingIdToSelect && buildingSelectElement.querySelector(`option[value="${buildingIdToSelect}"]`)) {
+          selectedBuildingId = buildingIdToSelect;
+          // console.log(`[updateBuildingSelectorForProject] Selecting specified building: ${selectedBuildingId}`);
+      } else if (currentBuildingId && buildingSelectElement.querySelector(`option[value="${currentBuildingId}"]`)) {
+          selectedBuildingId = currentBuildingId;
+          // console.log(`[updateBuildingSelectorForProject] Maintaining current building: ${selectedBuildingId}`);
+      } else if (lastUsedBuilding && buildingSelectElement.querySelector(`option[value="${lastUsedBuilding}"]`)) {
+          selectedBuildingId = lastUsedBuilding;
+          // console.log(`[updateBuildingSelectorForProject] Restoring last used building: ${selectedBuildingId}`);
+      } else {
+          // Fallback to 'site' if it exists, otherwise the first non-empty option
+          const siteOption = buildingSelectElement.querySelector('option[value="site"]');
+          if (siteOption) {
+              selectedBuildingId = 'site';
+              // console.log('[updateBuildingSelectorForProject] Selecting "site" as fallback.');
+      } else {
+          const firstOption = buildingSelectElement.querySelector('option:not([value=""])');
+          if (firstOption) {
+              selectedBuildingId = firstOption.value;
+                  // console.log(`[updateBuildingSelectorForProject] Selecting first available building: ${selectedBuildingId}`);
+          }
+      }
+      }
+      // console.log(`[updateBuildingSelectorForProject] Final selectedBuildingId: ${selectedBuildingId}`);
+      
+      if (selectedBuildingId) {
+          buildingSelectElement.value = selectedBuildingId;
+          currentBuildingId = selectedBuildingId;
+          lastUsedBuilding = selectedBuildingId; 
+          localStorage.setItem('lastBuildingId', currentBuildingId);
+          activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
+          // ★ 修正: fetchAndRenderDeteriorations 呼び出し修正
+          await fetchAndRenderDeteriorations(projectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+      } else {
+          console.log('[updateBuildingSelectorForProject] No building could be selected.');
+          activeBuildingNameSpanElement.textContent = '未選択';
+          // ★ 修正: renderDeteriorationTable 呼び出し修正
+          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+          updateNextIdDisplay(projectId, null, nextIdDisplayElement);
+          currentBuildingId = null;
+      }
+      
+    } else {
+      console.log('[updateBuildingSelectorForProject] No building entries found after fetch.');
+      buildingSelectElement.innerHTML = '<option value="">-- 建物未登録 --</option>';
+      activeBuildingNameSpanElement.textContent = '未登録';
+      // ★ 修正: renderDeteriorationTable 呼び出し修正
+      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+      updateNextIdDisplay(projectId, null, nextIdDisplayElement);
+      currentBuildingId = null;
+    }
+  } catch (error) {
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("[updateBuildingSelectorForProject] <<<< CATCH BLOCK EXECUTED >>>>");
+    console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching/processing buildings for project ${projectId}:`);
+    console.error("Error Object:", error);
+    buildingSelectElement.innerHTML = '<option value="">読み込みエラー</option>';
+    activeBuildingNameSpanElement.textContent = 'エラー';
+    // ★ 修正: renderDeteriorationTable 呼び出し修正
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+    updateNextIdDisplay(null, null, nextIdDisplayElement);
+    currentBuildingId = null;
+  }
 }
+
 
 // ======================================================================
 // 9. Basic Info & Project List Management
@@ -820,13 +923,13 @@ async function getNextDeteriorationNumber(projectId, buildingId) {
 }
 
 // ★ 修正: getNextPhotoNumber 関数 (新しいロジック)
-async function getNextPhotoNumber(projectId, category) {
-    if (!projectId || !category) {
-        console.warn("[getNextPhotoNumber] Missing projectId or category.");
+async function getNextPhotoNumber(projectId, buildingId) {
+    if (!projectId || !buildingId) {
+        console.warn("[getNextPhotoNumber] Missing projectId or buildingId.");
         return '0000'; // Default or error value
     }
-    const counterRef = getPhotoCounterRef(projectId, category);
-    const offset = getCategoryPhotoOffset(category); // Get category-specific offset
+    const counterRef = getPhotoCounterRef(projectId, buildingId);
+    const offset = getBuildingPhotoOffset(buildingId); // Get building-specific offset
     let nextLocalCounter = 1; // Counter within the building (starts from 1)
 
     try {
@@ -860,7 +963,7 @@ async function getNextPhotoNumber(projectId, category) {
     const finalPhotoNumber = offset + Math.min(nextLocalCounter, 999);
 
     if (nextLocalCounter > 999) {
-        console.warn(`[getNextPhotoNumber] Local counter ${nextLocalCounter} exceeded 999 for offset ${offset}. Capped at ${finalPhotoNumber}. Building: ${category}`);
+        console.warn(`[getNextPhotoNumber] Local counter ${nextLocalCounter} exceeded 999 for offset ${offset}. Capped at ${finalPhotoNumber}. Building: ${buildingId}`);
         // Consider logging this more permanently or alerting the user if necessary
     }
 
@@ -871,74 +974,67 @@ async function getNextPhotoNumber(projectId, category) {
 // 11. Event Handlers - Deterioration Form
 // ======================================================================
 // ★ 修正: recordLastAddedData 関数 (写真番号を除去)
-function recordLastAddedData(location, name, category) {
+function recordLastAddedData(location, name) {
     lastAddedLocation = location;
     lastAddedName = name;
-    lastAddedCategory = category;
     // console.log(`[recordLastAddedData] Recorded last added: Location="${lastAddedLocation}", Name="${lastAddedName}"`);
 }
 
 // ★ 修正: handleDeteriorationSubmit 関数
 async function handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, /* ★削除 */ nextIdDisplayElement, locationPredictionsElement) {
-   if (!locationInput || !deteriorationNameInput || !nextIdDisplayElement || !locationPredictionsElement) {
-       console.error("[handleDeteriorationSubmit] Missing required UI elements.");
-       alert("内部エラー: UI要素が見つかりません。");
-       return;
-   }
-   event.preventDefault();
-   // カテゴリ選択取得と検証
-   const category = document.getElementById('locationCategorySelect').value;
-   if (!category) {
-     alert("場所カテゴリを選択してください。");
-     return;
-   }
-   const location = locationInput.value.trim();
-   const deteriorationName = deteriorationNameInput.value.trim();
+  if (!locationInput || !deteriorationNameInput || !nextIdDisplayElement || !locationPredictionsElement) {
+      console.error("[handleDeteriorationSubmit] Missing required UI elements.");
+      alert("内部エラー: UI要素が見つかりません。");
+      return;
+  }
+  event.preventDefault();
+  const location = locationInput.value.trim();
+  const deteriorationName = deteriorationNameInput.value.trim();
 
-   if (!location || !deteriorationName) {
-     alert("場所と劣化名を入力してください。");
-     return;
-   }
+  if (!location || !deteriorationName) {
+    alert("場所と劣化名を入力してください。");
+    return;
+  }
 
-   if (!currentProjectId || !currentBuildingId) {
-     alert("現場名または建物名が選択されていません。");
-     return;
-   }
+  if (!currentProjectId || !currentBuildingId) {
+    alert("現場名または建物名が選択されていません。");
+    return;
+  }
 
-   console.log(`[handleDeteriorationSubmit] Submitting for ${currentProjectId}/${currentBuildingId}`);
+  console.log(`[handleDeteriorationSubmit] Submitting for ${currentProjectId}/${currentBuildingId}`);
 
-   try {
-     // Get next deterioration number and photo number in parallel
-     const [nextNumber, newPhotoNumber] = await Promise.all([
-         getNextDeteriorationNumber(currentProjectId, currentBuildingId),
-         getNextPhotoNumber(currentProjectId, category)
-     ]);
+  try {
+    // Get next deterioration number and photo number in parallel
+    const [nextNumber, newPhotoNumber] = await Promise.all([
+        getNextDeteriorationNumber(currentProjectId, currentBuildingId),
+        getNextPhotoNumber(currentProjectId, currentBuildingId)
+    ]);
 
-     const deteriorationData = {
-       number: nextNumber, 
-       location: location,
-       name: deteriorationName,
-       photoNumber: newPhotoNumber, // Use auto-generated photo number
-       createdAt: firebase.database.ServerValue.TIMESTAMP
-     };
+    const deteriorationData = {
+      number: nextNumber, 
+      location: location,
+      name: deteriorationName,
+      photoNumber: newPhotoNumber, // Use auto-generated photo number
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
 
-     const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
-     await deteriorationRef.push(deteriorationData);
+    const deteriorationRef = getDeteriorationsRef(currentProjectId, currentBuildingId);
+    await deteriorationRef.push(deteriorationData);
 
-     console.log("[handleDeteriorationSubmit] Submitted successfully.");
-     hidePredictions(locationPredictionsElement); 
-     locationInput.value = '';
-     deteriorationNameInput.value = '';
-     // Photo number input is removed
-     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-     recordLastAddedData(location, deteriorationName, category); // Record data for continuous add
-     locationInput.focus(); // Focus back on location input
+    console.log("[handleDeteriorationSubmit] Submitted successfully.");
+    hidePredictions(locationPredictionsElement); 
+    locationInput.value = '';
+    deteriorationNameInput.value = '';
+    // Photo number input is removed
+    updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
+    recordLastAddedData(location, deteriorationName); // Record data for continuous add
+    locationInput.focus(); // Focus back on location input
 
-   } catch (error) {
-     console.error("[handleDeteriorationSubmit] Error:", error);
-     alert("情報の保存中にエラーが発生しました: " + error.message);
-   }
- }
+  } catch (error) {
+      console.error("[handleDeteriorationSubmit] Error:", error);
+      alert("情報の保存中にエラーが発生しました: " + error.message);
+  }
+}
 
 // ★ 修正: handleContinuousAdd 関数
 async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
@@ -965,7 +1061,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
     // Get next deterioration number and photo number in parallel
     const [nextNumber, newPhotoNumber] = await Promise.all([
         getNextDeteriorationNumber(currentProjectId, currentBuildingId),
-        getNextPhotoNumber(currentProjectId, lastAddedCategory)
+        getNextPhotoNumber(currentProjectId, currentBuildingId)
     ]);
     
     const deteriorationData = {
@@ -982,7 +1078,7 @@ async function handleContinuousAdd(nextIdDisplayElement, locationInput) {
     console.log("[handleContinuousAdd] Submitted successfully.");
     // Don't clear inputs here, keep them for reference if needed
     updateNextIdDisplay(currentProjectId, currentBuildingId, nextIdDisplayElement);
-    recordLastAddedData(location, deteriorationName, lastAddedCategory); // Re-record in case needed again
+    recordLastAddedData(location, deteriorationName); // Re-record in case needed again
     locationInput.focus(); // Focus back on location input
 
   } catch (error) {
@@ -1281,13 +1377,7 @@ function setupSelectionListeners(siteNameInput, projectDataListElement, building
           await updateAndDisplayDataList(); // Refresh datalist with recent item first
 
           // ★ 修正: updateBuildingSelectorForProject 呼び出し修正
-          await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
-          // 詳細タブに切り替え
-          const infoTabBtnElem = document.getElementById('infoTabBtn');
-          const detailTabBtnElem = document.getElementById('detailTabBtn');
-          const infoTabElem = document.getElementById('infoTab');
-          const detailTabElem = document.getElementById('detailTab');
-          switchTab('detailTab', infoTabBtnElem, detailTabBtnElem, infoTabElem, detailTabElem);
+          await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
         } else {
           console.log(`[Site Name Change] Project "${selectedSiteName}" not found or name mismatch. Resetting.`);
           currentProjectId = null;
@@ -1344,7 +1434,7 @@ async function handleBuildingSelectChange(buildingSelectElement, activeBuildingN
     updateCameraLink(); // ★ ADD: Update camera link after selection change
 
     // Clear last added data when building changes
-    recordLastAddedData('', '', '');
+    recordLastAddedData('', '');
 }
 
 
@@ -1763,7 +1853,8 @@ async function initializeApp() {
   // DOM Element Retrieval
   const siteNameInput = document.getElementById('siteName');
   const projectDataListElement = document.getElementById('projectDataList');
-  const registerProjectBtn = document.getElementById('registerProjectBtn');
+  const buildingCheckboxContainer = document.getElementById('buildingCheckboxContainer');
+  const addBuildingBtn = document.getElementById('addBuildingBtn');
   const infoTabBtn = document.getElementById('infoTabBtn');
   const detailTabBtn = document.getElementById('detailTabBtn');
   const infoTab = document.getElementById('infoTab');
@@ -1776,6 +1867,7 @@ async function initializeApp() {
   const locationPredictionsElement = document.getElementById('locationPredictions');
   const deteriorationNameInput = document.getElementById('deteriorationNameInput');
   const suggestionsElement = document.getElementById('suggestions');
+  // const photoNumberInput = document.getElementById('photoNumberInput'); // ★ 削除
   const nextIdDisplayElement = document.getElementById('nextIdDisplay');
   const deteriorationTableBodyElement = document.getElementById('deteriorationTableBody');
   const continuousAddBtn = document.getElementById('continuousAddBtn');
@@ -1787,8 +1879,13 @@ async function initializeApp() {
   const editLocationPredictionsElement = document.getElementById('editLocationPredictions');
   const editDeteriorationNameInput = document.getElementById('editDeteriorationNameInput');
   const editSuggestionsElement = document.getElementById('editSuggestions');
+  // const editPhotoNumberInput = document.getElementById('editPhotoNumberInput'); // ★ 削除
   const cancelEditBtn = document.getElementById('cancelEditBtn');
   const currentYearSpan = document.getElementById('currentYear');
+
+  // Input Validation (Remove if not needed, but generally good practice)
+  // enforceHalfWidthDigits(photoNumberInput); // ★ 削除
+  // enforceHalfWidthDigits(editPhotoNumberInput); // ★ 削除
 
   // Load Initial Data
   await loadPredictionData();
@@ -1796,25 +1893,43 @@ async function initializeApp() {
 
   // Setup Event Listeners
   setupBasicInfoListeners(siteNameInput);
-  setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+  setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
 
   infoTabBtn.addEventListener('click', () => switchTab('infoTab', infoTabBtn, detailTabBtn, infoTab, detailTab));
   detailTabBtn.addEventListener('click', () => switchTab('detailTab', infoTabBtn, detailTabBtn, infoTab, detailTab));
 
-  buildingSelectElement.addEventListener('change', () => handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput));
+  buildingSelectElement.addEventListener('change', () => handleBuildingSelectChange(buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */));
 
   setupPredictionListeners(locationInput, locationPredictionsElement, generateLocationPredictions, 'deteriorationNameInput');
-  setupPredictionListeners(deteriorationNameInput, suggestionsElement, generateDegradationPredictions, 'submitDeteriorationBtn');
+  setupPredictionListeners(deteriorationNameInput, suggestionsElement, generateDegradationPredictions, 'submitDeteriorationBtn'); // 次のフォーカス先は登録ボタン
   setupPredictionListeners(editLocationInput, editLocationPredictionsElement, generateLocationPredictions, 'editDeteriorationNameInput');
-  setupPredictionListeners(editDeteriorationNameInput, editSuggestionsElement, generateDegradationPredictions, null);
+  setupPredictionListeners(editDeteriorationNameInput, editSuggestionsElement, generateDegradationPredictions, null); // モーダル内では次のフォーカス先指定なし
 
-  deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, nextIdDisplayElement, locationPredictionsElement));
+  deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, /* ★削除 */ nextIdDisplayElement, locationPredictionsElement));
   continuousAddBtn.addEventListener('click', () => handleContinuousAdd(nextIdDisplayElement, locationInput));
 
   exportCsvBtn.addEventListener('click', () => handleExportCsv(siteNameInput, buildingSelectElement));
 
-  editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, editModalElement));
+  editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, /* ★削除 */ editModalElement));
   cancelEditBtn.addEventListener('click', () => editModalElement.classList.add('hidden'));
+
+  // Add Building Listener
+  const addBuildingHandler = () => handleAddProjectAndBuilding(
+    siteNameInput,
+    buildingCheckboxContainer,
+    projectDataListElement,
+    buildingSelectElement,
+    activeProjectNameSpanElement,
+    activeBuildingNameSpanElement,
+    nextIdDisplayElement,
+    deteriorationTableBodyElement,
+    editModalElement,
+    editIdDisplay,
+    editLocationInput,
+    editDeteriorationNameInput, /* ★削除 */
+    infoTabBtn, detailTabBtn, infoTab, detailTab
+  );
+  addBuildingBtn.addEventListener('click', addBuildingHandler);
 
   // Footer Year
   if (currentYearSpan) {
@@ -1822,50 +1937,9 @@ async function initializeApp() {
   }
 
   // Initial State
-  switchTab('infoTab', infoTabBtn, detailTabBtn, infoTab, detailTab);
-  updateCameraLink();
+  switchTab('infoTab', infoTabBtn, detailTabBtn, infoTab, detailTab); // Start on info tab
+  updateCameraLink(); // ★ ADD: Initial camera link update
   console.log("Application initialized.");
-
-  // 登録ボタンイベント設定
-  if (registerProjectBtn) {
-    registerProjectBtn.addEventListener('click', async () => {
-      const name = siteNameInput.value.trim();
-      if (!name) {
-        showError('建物名を入力してください');
-        return;
-      }
-      const projectId = generateProjectId(name);
-      try {
-        const createdOrUpdated = await ensureProjectExists(projectId, name, projectDataListElement);
-        if (createdOrUpdated) {
-          clearProjectListCache();
-          const names = await populateProjectDataList(projectDataListElement);
-          updateDatalistWithOptions(names, projectDataListElement);
-        }
-        currentProjectId = projectId;
-        // 選択を詳細タブに反映
-        activeProjectNameSpanElement.textContent = name;
-        await updateBuildingSelectorForProject(
-          projectId,
-          buildingSelectElement,
-          activeBuildingNameSpanElement,
-          nextIdDisplayElement,
-          deteriorationTableBodyElement,
-          editModalElement,
-          editIdDisplay,
-          editLocationInput,
-          editDeteriorationNameInput
-        );
-        // 詳細タブに切り替え
-        switchTab('detailTab', infoTabBtn, detailTabBtn, infoTab, detailTab);
-        addProjectToRecentList(name);
-        alert('建物名を登録しました');
-      } catch (error) {
-        console.error('登録中にエラーが発生しました:', error);
-        showError('建物名の登録に失敗しました');
-      }
-    });
-  }
 }
 
 document.addEventListener('DOMContentLoaded', initializeApp);
