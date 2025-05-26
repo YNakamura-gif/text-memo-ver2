@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>12条点検 テキスト記録アプリ v2 (自動採番)</title>
+  <title>団地調査 記録アプリ v2 (自動採番)</title>
   
   <!-- PWA設定 -->
   <link rel="manifest" href="/manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="12条点検">
+  <meta name="apple-mobile-web-app-title" content="団地調査">
   <meta name="theme-color" content="#2563eb">
 
   <!-- アイコン設定 -->
@@ -21,8 +21,8 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-100 min-h-screen">
-  <header class="bg-green-600 text-white p-4 shadow-md">
-    <h1 class="text-lg font-bold text-center">12条点検 テキスト記録アプリ v2 (自動採番)</h1>
+  <header class="bg-orange-600 text-white p-4 shadow-md">
+    <h1 class="text-lg font-bold text-center">団地調査 記録アプリ v2 (自動採番)</h1>
   </header>
 
   <main class="container mx-auto p-4 max-w-md">
@@ -33,7 +33,7 @@
           基本情報
         </button>
         <button id="detailTabBtn" class="py-2 bg-gray-200 text-gray-700">
-          劣化情報
+          調査項目
         </button>
       </div>
     </div>
@@ -43,83 +43,83 @@
       <div class="bg-white p-4 rounded-md shadow-sm">
         <h2 class="text-lg font-semibold mb-4">基本情報</h2>
         <div class="mb-4">
-          <label for="siteName" class="block text-sm font-medium text-gray-700 mb-1">現場名</label>
+          <label for="siteName" class="block text-sm font-medium text-gray-700 mb-1">団地名</label>
           <div class="relative">
-            <input id="siteName" type="text" list="projectDataList" placeholder="現場名を入力または選択" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
+            <input id="siteName" type="text" list="projectDataList" placeholder="団地名を入力または選択" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10">
             <datalist id="projectDataList"></datalist>
           </div>
         </div>
 
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">建物を追加</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">調査区域を追加</label>
           <div id="buildingCheckboxContainer" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-x-4 gap-y-2 mb-3 p-3 border border-gray-200 rounded-md">
             <div>
               <input type="checkbox" id="addBuilding-site" name="buildingToAdd" value="site" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded" checked disabled>
-              <label for="addBuilding-site" class="text-sm text-gray-500">敷地</label>
+              <label for="addBuilding-site" class="text-sm text-gray-500">共用部</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-A" name="buildingToAdd" value="buildingA" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded" checked disabled>
-              <label for="addBuilding-A" class="text-sm text-gray-500">A棟</label>
+              <label for="addBuilding-A" class="text-sm text-gray-500">1号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-B" name="buildingToAdd" value="buildingB" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-B" class="text-sm">B棟</label>
+              <label for="addBuilding-B" class="text-sm">2号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-C" name="buildingToAdd" value="buildingC" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-C" class="text-sm">C棟</label>
+              <label for="addBuilding-C" class="text-sm">3号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-D" name="buildingToAdd" value="buildingD" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-D" class="text-sm">D棟</label>
+              <label for="addBuilding-D" class="text-sm">4号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-E" name="buildingToAdd" value="buildingE" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-E" class="text-sm">E棟</label>
+              <label for="addBuilding-E" class="text-sm">5号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-F" name="buildingToAdd" value="buildingF" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-F" class="text-sm">F棟</label>
+              <label for="addBuilding-F" class="text-sm">6号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-G" name="buildingToAdd" value="buildingG" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-G" class="text-sm">G棟</label>
+              <label for="addBuilding-G" class="text-sm">7号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-H" name="buildingToAdd" value="buildingH" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-H" class="text-sm">H棟</label>
+              <label for="addBuilding-H" class="text-sm">8号棟</label>
             </div>
             <div>
               <input type="checkbox" id="addBuilding-I" name="buildingToAdd" value="buildingI" class="mr-1 focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-              <label for="addBuilding-I" class="text-sm">I棟</label>
+              <label for="addBuilding-I" class="text-sm">9号棟</label>
             </div>
           </div>
           <button id="addBuildingBtn" type="button" class="bg-blue-600 text-white p-2 rounded-md h-10 px-4 w-full sm:w-auto">
-            選択した建物を追加
+            選択した調査区域を追加
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 劣化情報タブ -->
+    <!-- 調査項目タブ -->
     <div id="detailTab" class="tab-content hidden">
       <div class="mb-4 text-center">
-        <span class="font-semibold">現場:</span> <span id="activeProjectName" class="mr-4">未選択</span>
-        <span class="font-semibold">点検箇所:</span> <span id="activeBuildingName">未選択</span>
+        <span class="font-semibold">団地:</span> <span id="activeProjectName" class="mr-4">未選択</span>
+        <span class="font-semibold">調査区域:</span> <span id="activeBuildingName">未選択</span>
       </div>
 
       <div class="mb-4">
-        <label for="buildingSelect" class="block text-sm font-medium text-gray-700 mb-1">点検箇所選択</label>
+        <label for="buildingSelect" class="block text-sm font-medium text-gray-700 mb-1">調査区域選択</label>
         <select
           id="buildingSelect"
           class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           disabled
         >
-          <option value="">-- 現場を先に選択 --</option>
+          <option value="">-- 団地を先に選択 --</option>
         </select>
       </div>
 
-      <h2 class="text-lg font-semibold mb-4">劣化情報入力</h2>
+      <h2 class="text-lg font-semibold mb-4">調査項目入力</h2>
       
       <form id="deteriorationForm" class="bg-white p-4 rounded-md shadow-sm mb-4 relative">
         <a id="cameraLink" href="#" target="_blank" title="カメラアプリを開く (新しいタブ)" 
@@ -150,12 +150,12 @@
           </div>
           
           <div class="col-span-6">
-            <label for="deteriorationNameInput" class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
+            <label for="deteriorationNameInput" class="block text-sm font-medium text-gray-700 mb-1">調査内容</label>
             <div class="relative overflow-visible">
               <input
                 id="deteriorationNameInput"
                 type="text"
-                placeholder="劣化名を入力"
+                placeholder="調査内容を入力"
                 class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
               >
               <div id="suggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
@@ -187,7 +187,7 @@
           <button
             type="button"
             id="continuousAddBtn"
-            title="連続登録 (直前の場所・劣化名で追加)"
+            title="連続登録 (直前の場所・調査内容で追加)"
             class="bg-purple-600 text-white p-2 rounded-md h-10 flex items-center justify-center hover:bg-purple-700 text-sm px-3"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mr-1">
@@ -198,14 +198,14 @@
         </div>
       </form>
       
-      <h3 class="text-md font-medium mt-6 mb-2">登録済み劣化情報</h3>
+      <h3 class="text-md font-medium mt-6 mb-2">登録済み調査項目</h3>
       <div id="deteriorationList" class="bg-white rounded-md shadow-sm overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 table-layout-fixed w-full">
           <thead class="bg-gray-50">
             <tr>
               <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">番号</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">場所</th>
-              <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">劣化名</th>
+              <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">調査内容</th>
               <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">写真</th>
               <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
             </tr>
@@ -229,7 +229,7 @@
 
   <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md mx-4">
-      <h2 class="text-xl font-bold mb-4">劣化情報の編集</h2>
+      <h2 class="text-xl font-bold mb-4">調査項目の編集</h2>
       <form id="editForm">
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">番号</label>
@@ -244,9 +244,9 @@
           </div>
         </div>
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">劣化名</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">調査内容</label>
           <div class="relative overflow-visible">
-            <input id="editDeteriorationNameInput" type="text" placeholder="劣化名を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input id="editDeteriorationNameInput" type="text" placeholder="調査内容を入力" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div id="editSuggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
             </div>
           </div>
@@ -267,7 +267,7 @@
   </div>
 
   <footer class="bg-gray-200 p-3 text-center text-sm text-gray-600 mt-8">
-    <p>© <span id="currentYear"></span> 12条点検劣化調査アプリ</p>
+    <p>© <span id="currentYear"></span> 団地調査記録アプリ</p>
   </footer>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>

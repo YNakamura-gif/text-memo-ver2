@@ -1,23 +1,23 @@
 {
-  "name": "12条点検 テキスト記録アプリ v2",
-  "short_name": "12条点検",
-  "description": "12条点検の劣化調査を効率的に記録するアプリ",
-  "start_url": "/",
+  "name": "団地調査記録アプリ",
+  "short_name": "団地調査",
+  "description": "団地調査専用の記録アプリ",
   "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f97316",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 } 
