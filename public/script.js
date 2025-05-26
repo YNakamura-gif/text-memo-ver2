@@ -1165,113 +1165,152 @@ function handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriora
 // ======================================================================
 // 13. Event Handlers - Export & Other
 // ======================================================================
-// ★ 修正: handleExportCsv 関数 (photoNumber の扱いは変更なし、ファイル名修正)
+// ★ 修正: handleExportCsv 関数を団地全体のデータ出力に変更
 function handleExportCsv(siteNameInput, buildingSelectElement) {
-  if (!siteNameInput || !buildingSelectElement) {
-      console.error("[handleExportCsv] Missing siteNameInput or buildingSelectElement.");
+  if (!siteNameInput) {
+      console.error("[handleExportCsv] Missing siteNameInput.");
       return;
   }
   const siteName = siteNameInput.value.trim();
-  const buildingId = buildingSelectElement.value; // Use selected value (building ID)
 
-  if (!siteName || !buildingId) {
-    alert("現場と建物を選択してください。");
+  if (!siteName) {
+    alert("団地名を入力してください。");
     return;
   }
 
   const projectId = generateProjectId(siteName);
-  // No need to generate buildingId, it's already selected
 
   if (!projectId) {
-    alert("現場名が無効です。");
+    alert("団地名が無効です。");
     return;
   }
 
-  console.log(`[handleExportCsv] Exporting CSV for project: ${projectId}, building: ${buildingId}`);
+  console.log(`[handleExportCsv] Exporting CSV for entire project: ${projectId}`);
 
-  const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
-  deteriorationRef.orderByChild('number').once('value', (snapshot) => { // Order by number
-    const data = snapshot.val();
-    let deteriorations = [];
-    if (data) {
-      // Convert object to array and keep original keys if needed
-      deteriorations = Object.entries(data).map(([id, deterioration]) => ({
-        id, // Keep the Firebase key
-        ...deterioration
-      }));
-      // Sorting is now done by Firebase query (orderByChild)
-      // deteriorations.sort((a, b) => a.number - b.number);
-    } else {
+  // まず、プロジェクト内の全ての建物（調査区域）を取得
+  const buildingsRef = getBuildingsRef(projectId);
+  buildingsRef.once('value', async (buildingsSnapshot) => {
+    const buildingsData = buildingsSnapshot.val();
+    
+    if (!buildingsData) {
+      console.log("[handleExportCsv] No buildings found for project.");
+      alert("この団地には調査区域が登録されていません。");
+      return;
+    }
+
+    // 全ての調査区域のデータを収集
+    const allDeteriorations = [];
+    const buildingPromises = [];
+
+    Object.entries(buildingsData).forEach(([buildingId, buildingInfo]) => {
+      const buildingName = buildingInfo.name || buildingId;
+      
+      const promise = new Promise((resolve, reject) => {
+        const deteriorationRef = getDeteriorationsRef(projectId, buildingId);
+        deteriorationRef.orderByChild('number').once('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            // データを配列に変換し、調査区域名を追加
+            const deteriorations = Object.entries(data).map(([id, deterioration]) => ({
+              id,
+              buildingName: buildingName, // 調査区域名を追加
+              ...deterioration
+            }));
+            allDeteriorations.push(...deteriorations);
+          }
+          resolve();
+        }, reject);
+      });
+      
+      buildingPromises.push(promise);
+    });
+
+    try {
+      // 全ての調査区域のデータ取得を待機
+      await Promise.all(buildingPromises);
+
+      if (allDeteriorations.length === 0) {
         console.log("[handleExportCsv] No data found to export.");
         alert("エクスポートするデータがありません。");
         return;
+      }
+
+      // 調査区域名、番号順でソート
+      allDeteriorations.sort((a, b) => {
+        // まず調査区域名でソート
+        const buildingCompare = a.buildingName.localeCompare(b.buildingName, 'ja');
+        if (buildingCompare !== 0) return buildingCompare;
+        // 同じ調査区域内では番号でソート
+        return (a.number || 0) - (b.number || 0);
+      });
+
+      const csvHeader = ['調査区域', '番号', '場所', '調査内容', '写真番号', '登録日時'];
+
+      const csvRows = allDeteriorations.map(deterioration => {
+          let formattedDate = '';
+          if (deterioration.createdAt) {
+              try {
+              const date = new Date(deterioration.createdAt);
+                  if (!isNaN(date)) {
+              const pad = (num) => num.toString().padStart(2, '0');
+              formattedDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+                  } else {
+                      formattedDate = 'Invalid Date';
+                  }
+              } catch (e) {
+                   formattedDate = 'Date Error';
+              }
+          }
+
+          const escapeCsvField = (field) => {
+              const stringField = String(field == null ? '' : field);
+              if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
+                  return `"${stringField.replace(/"/g, '""')}"`;
+              }
+              return stringField;
+          };
+
+          return [
+              escapeCsvField(deterioration.buildingName),
+              escapeCsvField(deterioration.number),
+              escapeCsvField(deterioration.location),
+              escapeCsvField(deterioration.name),
+              escapeCsvField(deterioration.photoNumber),
+              escapeCsvField(formattedDate)
+          ].join(',');
+      });
+
+      const csvContent = [
+          csvHeader.join(','),
+          ...csvRows
+      ].join('\n');
+
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      const safeProjectId = projectId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      a.download = `${safeProjectId}_全調査区域_調査情報.csv`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      setTimeout(() => {
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+          console.log("[handleExportCsv] CSV export initiated and cleanup done.");
+      }, 100);
+
+    } catch (error) {
+      console.error("[handleExportCsv] Error collecting data for export:", error);
+      alert("CSVエクスポート用データの収集中にエラーが発生しました: " + error.message);
     }
 
-    const csvHeader = ['番号', '場所', '劣化名', '写真番号', '登録日時']; // Include timestamp
-
-    const csvRows = deteriorations.map(deterioration => {
-        let formattedDate = '';
-        if (deterioration.createdAt) {
-            try {
-            const date = new Date(deterioration.createdAt);
-                if (!isNaN(date)) { // Check if date is valid
-            const pad = (num) => num.toString().padStart(2, '0');
-            formattedDate = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-                } else {
-                    formattedDate = 'Invalid Date';
-                }
-            } catch (e) {
-                 formattedDate = 'Date Error';
-            }
-        }
-
-        const escapeCsvField = (field) => {
-            const stringField = String(field == null ? '' : field);
-            // Escape double quotes and wrap in double quotes if comma, newline or double quote exists
-            if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
-                return `"${stringField.replace(/"/g, '""')}"`;
-            }
-            return stringField;
-        };
-
-        return [
-            escapeCsvField(deterioration.number),
-            escapeCsvField(deterioration.location),
-            escapeCsvField(deterioration.name),
-            escapeCsvField(deterioration.photoNumber), // Auto-generated number
-            escapeCsvField(formattedDate)
-        ].join(',');
-    });
-
-    const csvContent = [
-        csvHeader.join(','),
-        ...csvRows
-    ].join('\n'); // Use newline character for rows
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    // Sanitize siteName and buildingId for filename
-    const safeProjectId = projectId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const safeBuildingId = buildingId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    a.download = `${safeProjectId}_${safeBuildingId}_劣化情報.csv`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-
-    // Cleanup
-    setTimeout(() => { // Delay revokeObjectURL slightly
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-        console.log("[handleExportCsv] CSV export initiated and cleanup done.");
-    }, 100);
-
-
   }, (error) => {
-    console.error("[handleExportCsv] Error fetching data for export:", error);
-    alert("CSVエクスポート用データの取得中にエラーが発生しました: " + error.message);
+    console.error("[handleExportCsv] Error fetching buildings for export:", error);
+    alert("調査区域情報の取得中にエラーが発生しました: " + error.message);
   });
 }
 
@@ -1890,7 +1929,7 @@ async function initializeApp() {
   deteriorationForm.addEventListener('submit', (event) => handleDeteriorationSubmit(event, locationInput, deteriorationNameInput, /* ★削除 */ nextIdDisplayElement, locationPredictionsElement));
   continuousAddBtn.addEventListener('click', () => handleContinuousAdd(nextIdDisplayElement, locationInput));
 
-  exportCsvBtn.addEventListener('click', () => handleExportCsv(siteNameInput, buildingSelectElement));
+  exportCsvBtn.addEventListener('click', () => handleExportCsv(siteNameInput));
 
   editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, /* ★削除 */ editModalElement));
   cancelEditBtn.addEventListener('click', () => editModalElement.classList.add('hidden'));
