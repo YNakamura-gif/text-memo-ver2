@@ -103,20 +103,36 @@ function zenkakuToHankaku(str) {
 
 
 // ======================================================================
+// ★ NEW: Fixed Survey Areas Definition
+// ======================================================================
+const FIXED_SURVEY_AREAS = [
+  { id: "area_a", name: "A：敷地", displayName: "A：敷地" },
+  { id: "area_b", name: "B：外壁", displayName: "B：外壁" },
+  { id: "area_c", name: "C：屋上", displayName: "C：屋上" },
+  { id: "area_e", name: "E：避難施設", displayName: "E：避難施設" },
+  { id: "area_other", name: "他：その他", displayName: "他：その他" }
+];
+
+// ======================================================================
 // ★ NEW: Building ID to Photo Number Offset Mapping
 // ======================================================================
 const BUILDING_PHOTO_OFFSETS = {
-  "site": 0, // 敷地
-  "buildingA": 1000, // A棟
-  "buildingB": 2000, // B棟
-  "buildingC": 3000, // C棟
-  "buildingD": 4000, // D棟
-  "buildingE": 5000, // E棟
-  "buildingF": 6000, // F棟
-  "buildingG": 7000, // G棟
-  "buildingH": 8000, // H棟
-  "buildingI": 9000, // I棟
-  // 必要に応じて他の建物のマッピングを追加 (IDは generateBuildingId で生成されるもの、または固定値)
+  "area_a": 0,    // A：敷地
+  "area_b": 1000, // B：外壁
+  "area_c": 2000, // C：屋上
+  "area_e": 3000, // E：避難施設
+  "area_other": 4000, // 他：その他
+  // 旧式の対応（互換性のため残す）
+  "site": 0,
+  "buildingA": 1000,
+  "buildingB": 2000,
+  "buildingC": 3000,
+  "buildingD": 4000,
+  "buildingE": 5000,
+  "buildingF": 6000,
+  "buildingG": 7000,
+  "buildingH": 8000,
+  "buildingI": 9000
 };
 
 // Helper function to get the offset for a building ID
@@ -569,7 +585,7 @@ async function updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement) 
 }
 
 // ★ 修正: 引数から editPhotoNumberInput を削除
-function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */) {
+function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput) {
     if (!deteriorationTableBodyElement) return;
     deteriorationTableBodyElement.innerHTML = ''; // Clear existing rows
 
@@ -625,8 +641,8 @@ function renderDeteriorationTable(recordsToRender, deteriorationTableBodyElement
 // ======================================================================
 // 8. Data Loading - Building List & Deteriorations
 // ======================================================================
-// ★ 修正: 引数から editPhotoNumberInput を削除
-async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */, buildingIdToSelect = null) {
+// ★ 修正: 固定の調査区域をプルダウンに表示するように変更
+async function updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput, buildingIdToSelect = null) {
   if (!buildingSelectElement || !activeBuildingNameSpanElement || !nextIdDisplayElement || !deteriorationTableBodyElement || !editModalElement || !editIdDisplay || !editLocationInput || !editDeteriorationNameInput) {
     console.error("[updateBuildingSelectorForProject] Missing one or more required UI elements.");
     return;
@@ -634,121 +650,62 @@ async function updateBuildingSelectorForProject(projectId, buildingSelectElement
 
   if (!projectId) {
     console.warn("[updateBuildingSelectorForProject] No projectId provided.");
-    buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
+    buildingSelectElement.innerHTML = '<option value="">-- 団地を先に選択 --</option>';
     buildingSelectElement.disabled = true;
     activeBuildingNameSpanElement.textContent = '未選択';
-    // ★ 修正: renderDeteriorationTable 呼び出し修正
-    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
     updateNextIdDisplay(null, null, nextIdDisplayElement);
     currentBuildingId = null;
     return;
   }
-  console.log(`[updateBuildingSelectorForProject] Updating buildings for project ${projectId}`);
-  const buildingsRef = getBuildingsRef(projectId);
-  buildingSelectElement.innerHTML = '<option value="">読み込み中...</option>';
-  buildingSelectElement.disabled = true;
 
-  try {
-    // console.log(`[updateBuildingSelectorForProject] Attempting to fetch buildings from Firebase for ${projectId}`);
-    const snapshot = await buildingsRef.once('value');
-    // console.log(`[updateBuildingSelectorForProject] Firebase snapshot received. Exists: ${snapshot.exists()}`);
-    const buildingsData = snapshot.val();
-    // console.log(`[updateBuildingSelectorForProject] Raw buildingsData:`, buildingsData);
-
-    const buildingEntries = buildingsData ? Object.entries(buildingsData) : [];
-    // console.log(`[updateBuildingSelectorForProject] Processed buildingEntries count: ${buildingEntries.length}`);
-
-    if (buildingEntries.length > 0) {
-      // console.log('[updateBuildingSelectorForProject] Building entries found. Populating selector...');
-      buildingSelectElement.innerHTML = '<option value="">-- 建物を選択 --</option>';
-      // Sort: site first, then by name
-      buildingEntries.sort(([idA, dataA], [idB, dataB]) => {
-          if (idA === 'site') return -1;
-          if (idB === 'site') return 1;
-          const nameA = dataA.name || '';
-          const nameB = dataB.name || '';
-          return nameA.localeCompare(nameB, 'ja');
-      });
-      // console.log('[updateBuildingSelectorForProject] Buildings sorted.');
-      
-      buildingEntries.forEach(([buildingId, buildingData]) => {
-        try {
-          const option = document.createElement('option');
-          option.value = buildingId;
-          option.textContent = buildingData?.name || `建物 (${buildingId})`; 
-          buildingSelectElement.appendChild(option);
-        } catch(loopError) {
-            console.error(`[updateBuildingSelectorForProject] Error adding option for building ID=${buildingId}:`, loopError);
-        }
-      });
-      buildingSelectElement.disabled = false;
-      // console.log('[updateBuildingSelectorForProject] Selector populated and enabled.');
-
-      let selectedBuildingId = null;
-      // console.log(`[updateBuildingSelectorForProject] Determining selection. Hint: ${buildingIdToSelect}, Current: ${currentBuildingId}, Last used: ${lastUsedBuilding}`);
-      if (buildingIdToSelect && buildingSelectElement.querySelector(`option[value="${buildingIdToSelect}"]`)) {
-          selectedBuildingId = buildingIdToSelect;
-          // console.log(`[updateBuildingSelectorForProject] Selecting specified building: ${selectedBuildingId}`);
-      } else if (currentBuildingId && buildingSelectElement.querySelector(`option[value="${currentBuildingId}"]`)) {
-          selectedBuildingId = currentBuildingId;
-          // console.log(`[updateBuildingSelectorForProject] Maintaining current building: ${selectedBuildingId}`);
-      } else if (lastUsedBuilding && buildingSelectElement.querySelector(`option[value="${lastUsedBuilding}"]`)) {
-          selectedBuildingId = lastUsedBuilding;
-          // console.log(`[updateBuildingSelectorForProject] Restoring last used building: ${selectedBuildingId}`);
-      } else {
-          // Fallback to 'site' if it exists, otherwise the first non-empty option
-          const siteOption = buildingSelectElement.querySelector('option[value="site"]');
-          if (siteOption) {
-              selectedBuildingId = 'site';
-              // console.log('[updateBuildingSelectorForProject] Selecting "site" as fallback.');
-      } else {
-          const firstOption = buildingSelectElement.querySelector('option:not([value=""])');
-          if (firstOption) {
-              selectedBuildingId = firstOption.value;
-                  // console.log(`[updateBuildingSelectorForProject] Selecting first available building: ${selectedBuildingId}`);
-          }
-      }
-      }
-      // console.log(`[updateBuildingSelectorForProject] Final selectedBuildingId: ${selectedBuildingId}`);
-      
-      if (selectedBuildingId) {
-          buildingSelectElement.value = selectedBuildingId;
-          currentBuildingId = selectedBuildingId;
-          lastUsedBuilding = selectedBuildingId; 
-          localStorage.setItem('lastBuildingId', currentBuildingId);
-          activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
-          // ★ 修正: fetchAndRenderDeteriorations 呼び出し修正
-          await fetchAndRenderDeteriorations(projectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-      } else {
-          console.log('[updateBuildingSelectorForProject] No building could be selected.');
-          activeBuildingNameSpanElement.textContent = '未選択';
-          // ★ 修正: renderDeteriorationTable 呼び出し修正
-          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-          updateNextIdDisplay(projectId, null, nextIdDisplayElement);
-          currentBuildingId = null;
-      }
-      
-    } else {
-      console.log('[updateBuildingSelectorForProject] No building entries found after fetch.');
-      buildingSelectElement.innerHTML = '<option value="">-- 建物未登録 --</option>';
-      activeBuildingNameSpanElement.textContent = '未登録';
-      // ★ 修正: renderDeteriorationTable 呼び出し修正
-      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-      updateNextIdDisplay(projectId, null, nextIdDisplayElement);
-      currentBuildingId = null;
-    }
-  } catch (error) {
-    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.error("[updateBuildingSelectorForProject] <<<< CATCH BLOCK EXECUTED >>>>");
-    console.error(`[updateBuildingSelectorForProject] <<<< ERROR >>>> Error fetching/processing buildings for project ${projectId}:`);
-    console.error("Error Object:", error);
-    buildingSelectElement.innerHTML = '<option value="">読み込みエラー</option>';
-    activeBuildingNameSpanElement.textContent = 'エラー';
-    // ★ 修正: renderDeteriorationTable 呼び出し修正
-    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-    updateNextIdDisplay(null, null, nextIdDisplayElement);
+  console.log(`[updateBuildingSelectorForProject] Setting up fixed survey areas for project ${projectId}`);
+  
+  // 固定の調査区域をプルダウンに表示
+  buildingSelectElement.innerHTML = '<option value="">-- 調査区域を選択 --</option>';
+  
+  FIXED_SURVEY_AREAS.forEach(area => {
+    const option = document.createElement('option');
+    option.value = area.id;
+    option.textContent = area.displayName;
+    buildingSelectElement.appendChild(option);
+  });
+  
+  buildingSelectElement.disabled = false;
+  
+  // デフォルトで最初の調査区域（A：敷地）を選択
+  let selectedBuildingId = null;
+  
+  if (buildingIdToSelect && buildingSelectElement.querySelector(`option[value="${buildingIdToSelect}"]`)) {
+    selectedBuildingId = buildingIdToSelect;
+  } else if (currentBuildingId && buildingSelectElement.querySelector(`option[value="${currentBuildingId}"]`)) {
+    selectedBuildingId = currentBuildingId;
+  } else if (lastUsedBuilding && buildingSelectElement.querySelector(`option[value="${lastUsedBuilding}"]`)) {
+    selectedBuildingId = lastUsedBuilding;
+  } else {
+    // デフォルトで最初の調査区域を選択
+    selectedBuildingId = FIXED_SURVEY_AREAS[0].id;
+  }
+  
+  if (selectedBuildingId) {
+    buildingSelectElement.value = selectedBuildingId;
+    currentBuildingId = selectedBuildingId;
+    lastUsedBuilding = selectedBuildingId;
+    localStorage.setItem('lastBuildingId', currentBuildingId);
+    activeBuildingNameSpanElement.textContent = buildingSelectElement.options[buildingSelectElement.selectedIndex]?.text || '不明';
+    await fetchAndRenderDeteriorations(projectId, currentBuildingId, deteriorationTableBodyElement, nextIdDisplayElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+    
+    // 各調査区域がFirebaseに存在することを確認（必要に応じて作成）
+    await ensureSurveyAreaExists(projectId, selectedBuildingId);
+  } else {
+    activeBuildingNameSpanElement.textContent = '未選択';
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+    updateNextIdDisplay(projectId, null, nextIdDisplayElement);
     currentBuildingId = null;
   }
+  
+  // カメラリンクの更新
+  updateCameraLink();
 }
 
 
@@ -1339,71 +1296,52 @@ function setupSelectionListeners(siteNameInput, projectDataListElement, building
 
   // Handle site name change (when selection is confirmed, e.g., blur or datalist selection)
   siteNameInput.addEventListener('change', async () => {
-    const selectedSiteName = siteNameInput.value.trim();
-    const projectId = generateProjectId(selectedSiteName);
-    console.log(`[Site Name Change] Selected: "${selectedSiteName}", ID: ${projectId}`);
-
-    // Detach old listeners before changing project
-    detachAllDeteriorationListeners();
+    const siteName = siteNameInput.value.trim();
+    const projectId = generateProjectId(siteName);
+    console.log(`[Site Name Change] New siteName: "${siteName}", Generated Project ID: "${projectId}"`);
 
     if (!projectId) {
-      console.log("[Site Name Change] No valid project ID. Resetting UI.");
+      console.warn("[Site Name Change] Empty project ID generated. Resetting state.");
       currentProjectId = null;
       currentBuildingId = null;
-      buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
+      buildingSelectElement.innerHTML = '<option value="">-- 団地名を入力 --</option>';
       buildingSelectElement.disabled = true;
       activeProjectNameSpanElement.textContent = '未選択';
       activeBuildingNameSpanElement.textContent = '未選択';
-      localStorage.removeItem('lastProjectId');
-      localStorage.removeItem('lastBuildingId');
       updateNextIdDisplay(null, null, nextIdDisplayElement);
-      // ★ 修正: renderDeteriorationTable 呼び出し修正
-      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
       return;
     }
 
-    // Check if project exists in Firebase
-    const projectInfoRef = getProjectInfoRef(projectId);
     try {
-        const snapshot = await projectInfoRef.once('value');
-        // Ensure the fetched project info actually corresponds to the selected name
-        if (snapshot.exists() && snapshot.val()?.siteName === selectedSiteName) {
-          console.log(`[Site Name Change] Project "${selectedSiteName}" exists. Loading details.`);
-          currentProjectId = projectId;
-          activeProjectNameSpanElement.textContent = selectedSiteName;
-          localStorage.setItem('lastProjectId', currentProjectId);
+        detachAllDeteriorationListeners();
 
-          addProjectToRecentList(selectedSiteName); // Add to recent list
-          await updateAndDisplayDataList(); // Refresh datalist with recent item first
+        currentProjectId = projectId;
+        localStorage.setItem('lastProjectId', currentProjectId);
+        activeProjectNameSpanElement.textContent = siteName;
 
-          // ★ 修正: updateBuildingSelectorForProject 呼び出し修正
-          await updateBuildingSelectorForProject(currentProjectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-        } else {
-          console.log(`[Site Name Change] Project "${selectedSiteName}" not found or name mismatch. Resetting.`);
-          currentProjectId = null;
-          currentBuildingId = null;
-          buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
-          buildingSelectElement.disabled = true;
-          activeProjectNameSpanElement.textContent = '未選択'; // Indicate no project selected
-          activeBuildingNameSpanElement.textContent = '未選択';
-          localStorage.removeItem('lastProjectId'); // Clear invalid stored ID
-          localStorage.removeItem('lastBuildingId');
-          updateNextIdDisplay(null, null, nextIdDisplayElement);
-          // ★ 修正: renderDeteriorationTable 呼び出し修正
-          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
-        }
+        // プロジェクトの存在確認・作成
+        await ensureProjectExists(projectId, siteName, projectDataListElement);
+        
+        // デフォルトの調査区域を初期化
+        await initializeDefaultSurveyAreas(projectId);
+
+        // 調査区域の更新
+        await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+
+        await loadBasicInfo(projectId, siteNameInput);
+        console.log(`[Site Name Change] Successfully updated to project ${projectId}`);
     } catch (error) {
-        console.error("[Site Name Change] Error checking project existence:", error);
-        alert("現場情報の確認中にエラーが発生しました。");
-        // Reset UI on error
-          currentProjectId = null;
-          currentBuildingId = null;
-          buildingSelectElement.innerHTML = '<option value="">-- 現場を先に選択 --</option>';
-          buildingSelectElement.disabled = true;
-          activeProjectNameSpanElement.textContent = 'エラー';
-          activeBuildingNameSpanElement.textContent = '未選択';
-          updateNextIdDisplay(null, null, nextIdDisplayElement);
-          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+        console.error("[Site Name Change] Error during project setup:", error);
+        alert("プロジェクトの設定中にエラーが発生しました。");
+        currentProjectId = null;
+        currentBuildingId = null;
+        buildingSelectElement.innerHTML = '<option value="">-- 団地を先に選択 --</option>';
+        buildingSelectElement.disabled = true;
+        activeProjectNameSpanElement.textContent = 'エラー';
+        activeBuildingNameSpanElement.textContent = '未選択';
+        updateNextIdDisplay(null, null, nextIdDisplayElement);
+        renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
     }
   });
 
@@ -1475,12 +1413,11 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
         })).sort((a, b) => (b.number || 0) - (a.number || 0));
         // console.log(`[Listener Callback] Rendering ${records.length} records for ${listenerKey}`);
         // ★ 修正: renderDeteriorationTable 呼び出し修正
-        renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+        renderDeteriorationTable(records, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
         // console.log(`[Listener Callback] Finished rendering for ${listenerKey}`);
     } catch (callbackError) {
         console.error(`[Listener Callback] <<<< ERROR >>>> Processing/Rendering for ${listenerKey}:`, callbackError);
-        // ★ 修正: renderDeteriorationTable 呼び出し修正
-        renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+        renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
         if (deteriorationTableBodyElement) {
         deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化リストの表示中にエラーが発生しました。</td></tr>';
         }
@@ -1490,10 +1427,9 @@ function setupDeteriorationListener(projectId, buildingId, deteriorationTableBod
   // console.log(`[setupDeteriorationListener] Attaching new listener for ${listenerKey}`);
   deteriorationRef.orderByChild('createdAt').on('value', listenerCallback, (error) => { // Order by creation time for listener? Or number? Let's stick with default/number for render sort.
     console.error(`[setupDeteriorationListener] <<<< LISTENER ERROR >>>> ${listenerKey}:`, error);
-    // ★ 修正: renderDeteriorationTable 呼び出し修正
-    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+    renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
     if (deteriorationTableBodyElement) {
-        deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500\">データのリアルタイム受信に失敗しました。</td></tr>';
+        deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">データのリアルタイム受信に失敗しました。</td></tr>';
     }
     // Clean up failed listener?
      delete deteriorationListeners[listenerKey];
@@ -1511,7 +1447,7 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
       console.error("[fetchAndRenderDeteriorations] Missing required arguments or UI elements. Cannot proceed.");
       // Attempt to render empty table if element exists
       if(deteriorationTableBodyElement && editModalElement && editIdDisplay && editLocationInput && editDeteriorationNameInput) {
-          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+          renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
       }
       if(nextIdDisplayElement) updateNextIdDisplay(projectId, buildingId, nextIdDisplayElement); // Try to update ID display
       console.log(`--- fetchAndRenderDeteriorations END (Missing Args/Elements) ---`);
@@ -1525,7 +1461,7 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
 
       // Setup the new listener
       // ★ 修正: setupDeteriorationListener 呼び出し修正
-      setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+      setupDeteriorationListener(projectId, buildingId, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
       // console.log(`[fetchAndRenderDeteriorations] Listener setup initiated.`);
 
       // Update the display for the next deterioration number
@@ -1534,7 +1470,7 @@ async function fetchAndRenderDeteriorations(projectId, buildingId, deterioration
   } catch (error) {
       console.error(`[fetchAndRenderDeteriorations] <<<< ERROR >>>> During setup for ${projectId}/${buildingId}:`, error);
       // ★ 修正: renderDeteriorationTable 呼び出し修正
-      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+      renderDeteriorationTable([], deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
       if (deteriorationTableBodyElement) {
       deteriorationTableBodyElement.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-red-500">劣化情報の準備中にエラーが発生しました。</td></tr>';
   }
@@ -1853,6 +1789,7 @@ async function initializeApp() {
   // DOM Element Retrieval
   const siteNameInput = document.getElementById('siteName');
   const projectDataListElement = document.getElementById('projectDataList');
+  const saveBasicInfoBtn = document.getElementById('saveBasicInfoBtn');
   const buildingCheckboxContainer = document.getElementById('buildingCheckboxContainer');
   const addBuildingBtn = document.getElementById('addBuildingBtn');
   const infoTabBtn = document.getElementById('infoTabBtn');
@@ -1893,7 +1830,52 @@ async function initializeApp() {
 
   // Setup Event Listeners
   setupBasicInfoListeners(siteNameInput);
-  setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput /* ★削除 */);
+  
+  // 基本情報保存ボタン
+  if (saveBasicInfoBtn) {
+    saveBasicInfoBtn.addEventListener('click', async () => {
+      const siteName = siteNameInput.value.trim();
+      if (!siteName) {
+        alert('団地名を入力してください。');
+        return;
+      }
+      
+      const projectId = generateProjectId(siteName);
+      if (!projectId) {
+        alert('有効な団地名を入力してください。');
+        return;
+      }
+      
+      try {
+        // プロジェクトの存在確認・作成
+        await ensureProjectExists(projectId, siteName, projectDataListElement);
+        
+        // デフォルトの調査区域を初期化
+        await initializeDefaultSurveyAreas(projectId);
+        
+        // 現在のプロジェクトIDを更新
+        currentProjectId = projectId;
+        localStorage.setItem('lastProjectId', currentProjectId);
+        
+        // 調査区域の更新
+        await updateBuildingSelectorForProject(projectId, buildingSelectElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
+        
+        // 表示の更新
+        activeProjectNameSpanElement.textContent = siteName;
+        addProjectToRecentList(siteName);
+        
+        alert('基本情報を保存しました。');
+        
+        // 調査項目タブに切り替え
+        switchTab('detailTab', infoTabBtn, detailTabBtn, infoTab, detailTab);
+      } catch (error) {
+        console.error('[saveBasicInfoBtn] Error saving basic info:', error);
+        alert('基本情報の保存中にエラーが発生しました。');
+      }
+    });
+  }
+  
+  setupSelectionListeners(siteNameInput, projectDataListElement, buildingSelectElement, activeProjectNameSpanElement, activeBuildingNameSpanElement, nextIdDisplayElement, deteriorationTableBodyElement, editModalElement, editIdDisplay, editLocationInput, editDeteriorationNameInput);
 
   infoTabBtn.addEventListener('click', () => switchTab('infoTab', infoTabBtn, detailTabBtn, infoTab, detailTab));
   detailTabBtn.addEventListener('click', () => switchTab('detailTab', infoTabBtn, detailTabBtn, infoTab, detailTab));
@@ -1913,23 +1895,23 @@ async function initializeApp() {
   editForm.addEventListener('submit', (event) => handleEditSubmit(event, editIdDisplay, editLocationInput, editDeteriorationNameInput, /* ★削除 */ editModalElement));
   cancelEditBtn.addEventListener('click', () => editModalElement.classList.add('hidden'));
 
-  // Add Building Listener
-  const addBuildingHandler = () => handleAddProjectAndBuilding(
-    siteNameInput,
-    buildingCheckboxContainer,
-    projectDataListElement,
-    buildingSelectElement,
-    activeProjectNameSpanElement,
-    activeBuildingNameSpanElement,
-    nextIdDisplayElement,
-    deteriorationTableBodyElement,
-    editModalElement,
-    editIdDisplay,
-    editLocationInput,
-    editDeteriorationNameInput, /* ★削除 */
-    infoTabBtn, detailTabBtn, infoTab, detailTab
-  );
-  addBuildingBtn.addEventListener('click', addBuildingHandler);
+  // Add Building Listener (無効化 - 固定調査区域を使用するため)
+  // const addBuildingHandler = () => handleAddProjectAndBuilding(
+  //   siteNameInput,
+  //   buildingCheckboxContainer,
+  //   projectDataListElement,
+  //   buildingSelectElement,
+  //   activeProjectNameSpanElement,
+  //   activeBuildingNameSpanElement,
+  //   nextIdDisplayElement,
+  //   deteriorationTableBodyElement,
+  //   editModalElement,
+  //   editIdDisplay,
+  //   editLocationInput,
+  //   editDeteriorationNameInput,
+  //   infoTabBtn, detailTabBtn, infoTab, detailTab
+  // );
+  // addBuildingBtn.addEventListener('click', addBuildingHandler);
 
   // Footer Year
   if (currentYearSpan) {
@@ -1943,3 +1925,46 @@ async function initializeApp() {
 }
 
 document.addEventListener('DOMContentLoaded', initializeApp);
+
+// ======================================================================
+// ★ NEW: Survey Area Management
+// ======================================================================
+async function ensureSurveyAreaExists(projectId, areaId) {
+  if (!projectId || !areaId) return;
+  
+  const area = FIXED_SURVEY_AREAS.find(a => a.id === areaId);
+  if (!area) return;
+  
+  const buildingRef = database.ref(`projects/${projectId}/buildings/${areaId}`);
+  try {
+    const snapshot = await buildingRef.once('value');
+    if (!snapshot.exists()) {
+      // 調査区域が存在しない場合は作成
+      await buildingRef.set({
+        name: area.name,
+        displayName: area.displayName,
+        createdAt: new Date().toISOString()
+      });
+      console.log(`[ensureSurveyAreaExists] Created survey area: ${area.name}`);
+    }
+  } catch (error) {
+    console.error(`[ensureSurveyAreaExists] Error ensuring survey area exists:`, error);
+  }
+}
+
+// ======================================================================
+// ★ NEW: Initialize Default Survey Areas for Project
+// ======================================================================
+async function initializeDefaultSurveyAreas(projectId) {
+  if (!projectId) return;
+  
+  console.log(`[initializeDefaultSurveyAreas] Initializing default survey areas for project: ${projectId}`);
+  
+  try {
+    const promises = FIXED_SURVEY_AREAS.map(area => ensureSurveyAreaExists(projectId, area.id));
+    await Promise.all(promises);
+    console.log(`[initializeDefaultSurveyAreas] All default survey areas initialized for project: ${projectId}`);
+  } catch (error) {
+    console.error(`[initializeDefaultSurveyAreas] Error initializing default survey areas:`, error);
+  }
+}
